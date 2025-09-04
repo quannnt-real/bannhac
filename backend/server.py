@@ -54,6 +54,69 @@ async def get_status_checks():
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
 
+# Proxy endpoints for htnguonsong.com API to handle CORS
+@api_router.get("/proxy/songs")
+async def proxy_songs(
+    page: int = 1,
+    per_page: int = 20,
+    search: str = None,
+    sort_by: str = None,
+    sort_order: str = "asc",
+    sort_by_2: str = None,
+    sort_order_2: str = "asc"
+):
+    try:
+        params = {
+            "page": page,
+            "per_page": per_page
+        }
+        
+        if search:
+            params["search"] = search
+        if sort_by:
+            params["sort_by"] = sort_by
+            params["sort_order"] = sort_order
+        if sort_by_2:
+            params["sort_by_2"] = sort_by_2
+            params["sort_order_2"] = sort_order_2
+            
+        async with httpx.AsyncClient() as client:
+            response = await client.get("https://htnguonsong.com/api/songs", params=params)
+            return response.json()
+    except Exception as e:
+        logger.error(f"Error proxying songs API: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.get("/proxy/songs/view/{song_id}")
+async def proxy_song_detail(song_id: int):
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"https://htnguonsong.com/api/songs/view/{song_id}")
+            return response.json()
+    except Exception as e:
+        logger.error(f"Error proxying song detail API: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.get("/proxy/songs/types")
+async def proxy_song_types():
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get("https://htnguonsong.com/api/songs/types")
+            return response.json()
+    except Exception as e:
+        logger.error(f"Error proxying song types API: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.get("/proxy/songs/topics")
+async def proxy_song_topics():
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get("https://htnguonsong.com/api/songs/topics")
+            return response.json()
+    except Exception as e:
+        logger.error(f"Error proxying song topics API: {e}")
+        return {"success": False, "error": str(e)}
+
 # Include the router in the main app
 app.include_router(api_router)
 
