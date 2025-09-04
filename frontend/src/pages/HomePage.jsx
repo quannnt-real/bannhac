@@ -268,19 +268,85 @@ const HomePage = () => {
         </div>
 
         {/* Songs grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredSongs.map((song) => (
-            <SongCard
-              key={song.id}
-              song={song}
-              onPlay={handleSongPlay}
-              onToggleFavorite={toggleFavorite}
-              isFavorite={isFavorite(song.id)}
-            />
-          ))}
-        </div>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="bg-gray-200 rounded-lg h-48"></div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredSongs.map((song) => (
+                <SongCard
+                  key={song.id}
+                  song={song}
+                  onPlay={handleSongPlay}
+                  onToggleFavorite={toggleFavorite}
+                  isFavorite={isFavorite(song.id)}
+                />
+              ))}
+            </div>
 
-        {filteredSongs.length === 0 && (
+            {/* Pagination for online mode */}
+            {!isOffline && pagination.total_pages > 1 && (
+              <div className="flex items-center justify-center mt-8 gap-2">
+                <Button
+                  onClick={() => setPagination(prev => ({ ...prev, current_page: prev.current_page - 1 }))}
+                  disabled={!pagination.has_prev}
+                  variant="outline"
+                  size="sm"
+                >
+                  Trước
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, pagination.total_pages) }, (_, i) => {
+                    const page = i + 1;
+                    return (
+                      <Button
+                        key={page}
+                        onClick={() => setPagination(prev => ({ ...prev, current_page: page }))}
+                        variant={pagination.current_page === page ? "default" : "outline"}
+                        size="sm"
+                        className="w-8 h-8 p-0"
+                      >
+                        {page}
+                      </Button>
+                    );
+                  })}
+                  
+                  {pagination.total_pages > 5 && (
+                    <>
+                      <span className="mx-2">...</span>
+                      <Button
+                        onClick={() => setPagination(prev => ({ ...prev, current_page: pagination.total_pages }))}
+                        variant={pagination.current_page === pagination.total_pages ? "default" : "outline"}
+                        size="sm"
+                        className="w-8 h-8 p-0"
+                      >
+                        {pagination.total_pages}
+                      </Button>
+                    </>
+                  )}
+                </div>
+                
+                <Button
+                  onClick={() => setPagination(prev => ({ ...prev, current_page: prev.current_page + 1 }))}
+                  disabled={!pagination.has_next}
+                  variant="outline"
+                  size="sm"
+                >
+                  Sau
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+
+        {!loading && filteredSongs.length === 0 && (
           <div className="text-center py-12">
             <Music className="h-16 w-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-600 mb-2">Không tìm thấy bài hát</h3>
