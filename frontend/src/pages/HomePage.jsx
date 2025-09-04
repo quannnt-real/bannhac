@@ -364,57 +364,18 @@ const HomePage = () => {
               ))}
             </div>
 
-            {/* Pagination for online mode */}
-            {!isOffline && pagination.total_pages > 1 && (
-              <div className="flex items-center justify-center mt-8 gap-2">
-                <Button
-                  onClick={() => setPagination(prev => ({ ...prev, current_page: prev.current_page - 1 }))}
-                  disabled={!pagination.has_prev}
-                  variant="outline"
-                  size="sm"
-                >
-                  Trước
-                </Button>
-                
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, pagination.total_pages) }, (_, i) => {
-                    const page = i + 1;
-                    return (
-                      <Button
-                        key={page}
-                        onClick={() => setPagination(prev => ({ ...prev, current_page: page }))}
-                        variant={pagination.current_page === page ? "default" : "outline"}
-                        size="sm"
-                        className="w-8 h-8 p-0"
-                      >
-                        {page}
-                      </Button>
-                    );
-                  })}
-                  
-                  {pagination.total_pages > 5 && (
-                    <>
-                      <span className="mx-2">...</span>
-                      <Button
-                        onClick={() => setPagination(prev => ({ ...prev, current_page: pagination.total_pages }))}
-                        variant={pagination.current_page === pagination.total_pages ? "default" : "outline"}
-                        size="sm"
-                        className="w-8 h-8 p-0"
-                      >
-                        {pagination.total_pages}
-                      </Button>
-                    </>
-                  )}
-                </div>
-                
-                <Button
-                  onClick={() => setPagination(prev => ({ ...prev, current_page: prev.current_page + 1 }))}
-                  disabled={!pagination.has_next}
-                  variant="outline"
-                  size="sm"
-                >
-                  Sau
-                </Button>
+            {/* Loading more indicator */}
+            {loadingMore && (
+              <div className="flex items-center justify-center mt-8 py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <span className="ml-2 text-gray-600">Đang tải thêm...</span>
+              </div>
+            )}
+            
+            {/* End of results indicator */}
+            {!isOffline && !pagination.has_next && !loading && filteredSongs.length > 0 && (
+              <div className="text-center mt-8 py-4">
+                <p className="text-gray-500">Đã hiển thị tất cả {pagination.total_items} bài hát</p>
               </div>
             )}
           </>
