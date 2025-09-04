@@ -69,10 +69,19 @@ const HomePage = () => {
         ]);
 
         if (songsData.success) {
-          setSongs(songsData.data);
+          if (pagination.current_page === 1) {
+            // First load or search - replace all songs
+            setSongs(songsData.data);
+            setAllSongs(songsData.data);
+          } else {
+            // Load more - append to existing songs
+            const newSongs = [...allSongs, ...songsData.data];
+            setSongs(newSongs);
+            setAllSongs(newSongs);
+          }
           setPagination(songsData.pagination);
           // Save to localStorage for offline access
-          localStorage.setItem('songs_data', JSON.stringify(songsData.data));
+          localStorage.setItem('songs_data', JSON.stringify(allSongs));
           localStorage.setItem('pagination_data', JSON.stringify(songsData.pagination));
         }
 
