@@ -32,23 +32,34 @@ const SongDetailPage = () => {
   ];
 
   useEffect(() => {
-    // Mock data - in real app, this would fetch from API
-    if (id === '137') {
-      setSong(mockSongDetail);
-      setCurrentKey(mockSongDetail.key_chord);
-    } else {
-      // Handle other song IDs with basic data
-      setSong({
-        id: parseInt(id),
-        title: 'Bài hát demo',
-        key_chord: 'C',
-        lyric: '[1]\n[C]Lời bài hát [F]demo với [G]hợp âm [C]cơ bản\n[C]Để test chức [Am]năng chuyển [F]tone và đổi [G]màu [C]chord\n[chorus]\n[F]Điệp khúc [G]của bài [C]hát\n[F]Với những [G]hợp âm [C]đẹp',
-        type_name: 'Demo',
-        topic_name: null
-      });
-      setCurrentKey('C');
-    }
-  }, [id]);
+    const fetchSongDetail = async () => {
+      try {
+        const response = await fetch(`https://htnguonsong.com/api/songs/view/${id}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          setSong(data.data);
+          setCurrentKey(data.data.key_chord);
+        } else {
+          console.error('Failed to fetch song:', data);
+          navigate('/');
+        }
+      } catch (error) {
+        console.error('Error fetching song:', error);
+        // Try to load from localStorage if offline
+        const offlineData = localStorage.getItem(`song_${id}`);
+        if (offlineData) {
+          const songData = JSON.parse(offlineData);
+          setSong(songData);
+          setCurrentKey(songData.key_chord);
+        } else {
+          navigate('/');
+        }
+      }
+    };
+
+    fetchSongDetail();
+  }, [id, navigate]);
 
   useEffect(() => {
     if (song?.lyric) {
