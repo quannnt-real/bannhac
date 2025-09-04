@@ -185,6 +185,14 @@ const HomePage = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              {/* Connection status */}
+              <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
+                isOffline ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'
+              }`}>
+                {isOffline ? <WifiOff className="h-3 w-3" /> : <Wifi className="h-3 w-3" />}
+                {isOffline ? 'Offline' : 'Online'}
+              </div>
+              
               <Button
                 onClick={() => navigate('/playlist')}
                 variant="outline"
