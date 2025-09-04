@@ -27,11 +27,95 @@ const HomePage = () => {
     has_prev: false
   });
 
-  // Filtered and sorted songs
+  // Fetch songs from API
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Build API URL with search and sort parameters
+        const params = new URLSearchParams({
+          per_page: pagination.per_page.toString(),
+          page: pagination.current_page.toString()
+        });
+
+        if (searchTerm.trim()) {
+          params.append('search', searchTerm);
+        }
+
+        if (sortConfig.primary.field) {
+          params.append('sort_by', sortConfig.primary.field);
+          params.append('sort_order', sortConfig.primary.order);
+          
+          if (sortConfig.secondary.field) {
+            params.append('sort_by_2', sortConfig.secondary.field);
+            params.append('sort_order_2', sortConfig.secondary.order);
+          }
+        }
+
+        const [songsRes, typesRes, topicsRes] = await Promise.all([
+          fetch(`https://htnguonsong.com/api/songs?${params}`),
+          fetch('https://htnguonsong.com/api/songs/types'),
+          fetch('https://htnguonsong.com/api/songs/topics')
+        ]);
+
+        const [songsData, typesData, topicsData] = await Promise.all([
+          songsRes.json(),
+          typesRes.json(),
+          topicsRes.json()
+        ]);
+
+        if (songsData.success) {
+          setSongs(songsData.data);
+          setPagination(songsData.pagination);
+          // Save to localStorage for offline access
+          localStorage.setItem('songs_data', JSON.stringify(songsData.data));
+          localStorage.setItem('pagination_data', JSON.stringify(songsData.pagination));
+        }
+
+        if (typesData.success) {
+          setTypes(typesData.data);
+          localStorage.setItem('types_data', JSON.stringify(typesData.data));
+        }
+
+        if (topicsData.success) {
+          setTopics(topicsData.data);
+          localStorage.setItem('topics_data', JSON.stringify(topicsData.data));
+        }
+
+        setIsOffline(false);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        setIsOffline(true);
+        
+        // Load from localStorage if offline
+        const savedSongs = localStorage.getItem('songs_data');
+        const savedTypes = localStorage.getItem('types_data');
+        const savedTopics = localStorage.getItem('topics_data');
+        const savedPagination = localStorage.getItem('pagination_data');
+        
+        if (savedSongs) setSongs(JSON.parse(savedSongs));
+        if (savedTypes) setTypes(JSON.parse(savedTypes));
+        if (savedTopics) setTopics(JSON.parse(savedTopics));
+        if (savedPagination) setPagination(JSON.parse(savedPagination));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(() => {
+      fetchData();
+    }, searchTerm ? 500 : 0); // Debounce search
+
+    return () => clearTimeout(debounceTimer);
+  }, [searchTerm, sortConfig, pagination.current_page]);
+
+  // Filtered songs (for offline search)
   const filteredSongs = useMemo(() => {
+    if (!isOffline) return songs; // Use API results when online
+    
     let filtered = songs;
 
-    // Search filter
+    // Search filter (only when offline)
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(song =>
@@ -41,37 +125,8 @@ const HomePage = () => {
       );
     }
 
-    // Apply sorting
-    if (sortConfig.primary.field) {
-      filtered = [...filtered].sort((a, b) => {
-        const aVal = a[sortConfig.primary.field] || '';
-        const bVal = b[sortConfig.primary.field] || '';
-        
-        let primaryCompare = 0;
-        if (aVal < bVal) primaryCompare = -1;
-        if (aVal > bVal) primaryCompare = 1;
-        
-        if (sortConfig.primary.order === 'desc') primaryCompare *= -1;
-        
-        // Secondary sort if primary values are equal
-        if (primaryCompare === 0 && sortConfig.secondary.field) {
-          const aSecVal = a[sortConfig.secondary.field] || '';
-          const bSecVal = b[sortConfig.secondary.field] || '';
-          
-          let secondaryCompare = 0;
-          if (aSecVal < bSecVal) secondaryCompare = -1;
-          if (aSecVal > bSecVal) secondaryCompare = 1;
-          
-          if (sortConfig.secondary.order === 'desc') secondaryCompare *= -1;
-          return secondaryCompare;
-        }
-        
-        return primaryCompare;
-      });
-    }
-
     return filtered;
-  }, [songs, searchTerm, sortConfig]);
+  }, [songs, searchTerm, isOffline]);
 
   // Generate search suggestions based on existing data
   const searchSuggestions = useMemo(() => {
