@@ -4,7 +4,6 @@ import './App.css';
 import HomePage from './pages/HomePage';
 import SongDetailPage from './pages/SongDetailPage';
 import PlaylistPage from './pages/PlaylistPage';
-import { mockSongs, mockTypes, mockTopics, mockKeyChords } from './data/mockData';
 
 // Context for managing app state
 const AppContext = React.createContext();
