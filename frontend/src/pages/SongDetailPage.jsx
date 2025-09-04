@@ -98,8 +98,16 @@ const SongDetailPage = () => {
   const renderLyricLine = (line, index) => {
     if (line.type === 'section') {
       return (
-        <div key={index} className="my-4">
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 px-3 py-1">
+        <div key={index} className="my-6 text-center">
+          <Badge 
+            variant="outline" 
+            className="px-4 py-2 text-base font-semibold rounded-full"
+            style={{ 
+              backgroundColor: chordColor + '20', 
+              color: chordColor,
+              borderColor: chordColor + '40'
+            }}
+          >
             {line.content}
           </Badge>
         </div>
@@ -109,7 +117,6 @@ const SongDetailPage = () => {
     if (line.type === 'lyric') {
       const words = line.text.split(' ');
       const result = [];
-      let wordIndex = 0;
       let currentPos = 0;
 
       // Create a mapping of positions to chords
@@ -127,19 +134,23 @@ const SongDetailPage = () => {
             : originalChord;
 
           result.push(
-            <span key={`chord-${idx}`} className="relative inline-block mr-1">
+            <span key={`chord-${idx}`} className="relative inline-block mr-2">
               <span 
-                className="absolute -top-6 left-0 text-sm font-bold whitespace-nowrap"
-                style={{ color: chordColor }}
+                className="absolute -top-7 left-0 text-sm font-bold whitespace-nowrap px-1 py-0.5 rounded"
+                style={{ 
+                  color: chordColor,
+                  backgroundColor: chordColor + '10',
+                  fontSize: '13px'
+                }}
               >
                 {transposedChord}
               </span>
-              <span className="text-gray-800">{word}</span>
+              <span className="text-gray-700 text-lg leading-relaxed">{word}</span>
             </span>
           );
         } else {
           result.push(
-            <span key={`word-${idx}`} className="text-gray-800 mr-1">
+            <span key={`word-${idx}`} className="text-gray-700 text-lg leading-relaxed mr-2">
               {word}
             </span>
           );
@@ -149,7 +160,7 @@ const SongDetailPage = () => {
       });
 
       return (
-        <div key={index} className="leading-8 py-1 min-h-[2rem]">
+        <div key={index} className="leading-10 py-2 min-h-[3rem] text-left">
           {result}
         </div>
       );
