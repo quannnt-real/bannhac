@@ -60,8 +60,11 @@ const AppProvider = ({ children }) => {
     toggleFavorite,
     isFavorite,
     types,
+    setTypes,
     topics,
+    setTopics,
     keyChords,
+    setKeyChords,
     isOffline,
     setIsOffline
   };
