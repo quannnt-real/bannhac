@@ -252,57 +252,91 @@ const SongDetailPage = () => {
         </div>
       </header>
 
-      {/* Controls */}
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {/* Key transpose */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Music2 className="h-5 w-5 text-blue-500" />
-                Chuyển tone
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Select value={currentKey} onValueChange={handleKeyChange}>
-                <SelectTrigger className="border-blue-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {getAvailableKeys().map(key => (
-                    <SelectItem key={key} value={key}>
-                      {key} {key === song.key_chord && '(Gốc)'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
+      {/* Controls - Compact design */}
+      <div className="container mx-auto px-4 py-4">
+        <div className="flex items-center justify-between bg-white/80 backdrop-blur-sm rounded-xl p-4 mb-6 border border-blue-100">
+          {/* Key transpose buttons */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-600 mr-2">Tone:</span>
+            <div className="flex flex-wrap gap-1">
+              {getAvailableKeys().slice(0, 8).map(key => (
+                <Button
+                  key={key}
+                  onClick={() => handleKeyChange(key)}
+                  variant={currentKey === key ? "default" : "outline"}
+                  size="sm"
+                  className={`px-3 py-1 text-xs ${
+                    currentKey === key 
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'border-blue-200 text-blue-600 hover:bg-blue-50'
+                  }`}
+                >
+                  {key}
+                  {key === song?.key_chord && <span className="ml-1 text-xs">*</span>}
+                </Button>
+              ))}
+              {getAvailableKeys().length > 8 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="px-2 py-1 text-xs border-blue-200">
+                      +{getAvailableKeys().length - 8}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-2">
+                    <div className="grid grid-cols-2 gap-1">
+                      {getAvailableKeys().slice(8).map(key => (
+                        <Button
+                          key={key}
+                          onClick={() => handleKeyChange(key)}
+                          variant={currentKey === key ? "default" : "outline"}
+                          size="sm"
+                          className="px-3 py-1 text-xs"
+                        >
+                          {key}
+                        </Button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
+          </div>
 
-          {/* Chord color */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Palette className="h-5 w-5 text-blue-500" />
-                Màu hợp âm
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-4 gap-2">
-                {chordColors.map(color => (
-                  <button
-                    key={color.value}
-                    onClick={() => setChordColor(color.value)}
-                    className={`w-full h-10 rounded-lg border-2 transition-all ${
-                      chordColor === color.value ? 'border-gray-400 scale-110' : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                    style={{ backgroundColor: color.value }}
-                    title={color.name}
+          {/* Settings popover */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="border-blue-200 text-blue-600 hover:bg-blue-50">
+                <Settings className="h-4 w-4 mr-1" />
+                Tùy chỉnh
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600 mb-2 block">Màu hợp âm</label>
+                  <input
+                    type="color"
+                    value={chordColor}
+                    onChange={(e) => setChordColor(e.target.value)}
+                    className="w-full h-10 rounded-lg border border-gray-200 cursor-pointer"
                   />
-                ))}
+                </div>
+                <div className="grid grid-cols-4 gap-1">
+                  {chordColors.map(color => (
+                    <button
+                      key={color.value}
+                      onClick={() => setChordColor(color.value)}
+                      className={`w-8 h-8 rounded-lg border-2 transition-all ${
+                        chordColor === color.value ? 'border-gray-800 scale-110' : 'border-gray-200 hover:border-gray-400'
+                      }`}
+                      style={{ backgroundColor: color.value }}
+                      title={color.name}
+                    />
+                  ))}
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Lyrics */}
