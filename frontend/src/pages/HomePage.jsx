@@ -249,9 +249,20 @@ const HomePage = () => {
       <main className="container mx-auto px-4 py-6 pb-24">
         <div className="mb-6">
           <p className="text-gray-600">
-            Tìm thấy <span className="font-semibold text-blue-600">{filteredSongs.length}</span> bài hát
-            {searchTerm && (
-              <span> cho từ khóa "<span className="font-semibold">{searchTerm}</span>"</span>
+            {loading ? (
+              'Đang tải...'
+            ) : (
+              <>
+                Tìm thấy <span className="font-semibold text-blue-600">
+                  {isOffline ? filteredSongs.length : pagination.total_items}
+                </span> bài hát
+                {searchTerm && (
+                  <span> cho từ khóa "<span className="font-semibold">{searchTerm}</span>"</span>
+                )}
+                {isOffline && (
+                  <span className="ml-2 text-orange-600 text-sm">(Chế độ offline)</span>
+                )}
+              </>
             )}
           </p>
         </div>
