@@ -18,8 +18,12 @@ const SongDetailPage = () => {
   const [song, setSong] = useState(null);
   const [currentKey, setCurrentKey] = useState('');
   const [chordColor, setChordColor] = useState('#ef4444'); // Default red
+  const [sectionColor, setSectionColor] = useState('#3b82f6'); // Default blue
   const [parsedLyrics, setParsedLyrics] = useState([]);
   const [currentFavoriteIndex, setCurrentFavoriteIndex] = useState(-1);
+  const [lyricFontSize, setLyricFontSize] = useState(18);
+  const [chordFontSize, setChordFontSize] = useState(14);
+  const [sectionFontSize, setSectionFontSize] = useState(16);
 
   const chordColors = [
     { name: 'Đỏ', value: '#ef4444' },
