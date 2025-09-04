@@ -116,24 +116,25 @@ const SongDetailPage = () => {
   const renderLyricLine = (line, index) => {
     if (line.type === 'section') {
       return (
-        <div key={index} className="my-6 text-center">
+        <div key={index} className="my-8 text-center">
           <Badge 
             variant="outline" 
-            className="px-4 py-2 text-base font-semibold rounded-full"
+            className="px-6 py-3 font-bold rounded-full border-2"
             style={{ 
-              backgroundColor: chordColor + '20', 
-              color: chordColor,
-              borderColor: chordColor + '40'
+              backgroundColor: sectionColor + '15', 
+              color: sectionColor,
+              borderColor: sectionColor + '60',
+              fontSize: `${sectionFontSize}px`
             }}
           >
-            {line.content}
+            {line.content.toUpperCase()}
           </Badge>
         </div>
       );
     }
 
     if (line.type === 'lyric') {
-      const words = line.text.split(' ');
+      const words = line.text.split(' ').filter(word => word.trim());
       const result = [];
       let currentPos = 0;
 
@@ -152,23 +153,34 @@ const SongDetailPage = () => {
             : originalChord;
 
           result.push(
-            <span key={`chord-${idx}`} className="relative inline-block mr-2">
+            <span key={`chord-${idx}`} className="relative inline-block mr-1" style={{ minWidth: '40px' }}>
               <span 
-                className="absolute -top-7 left-0 text-sm font-bold whitespace-nowrap px-1 py-0.5 rounded"
+                className="absolute left-0 font-bold whitespace-nowrap px-2 py-1 rounded shadow-sm"
                 style={{ 
                   color: chordColor,
-                  backgroundColor: chordColor + '10',
-                  fontSize: '13px'
+                  backgroundColor: chordColor + '20',
+                  fontSize: `${chordFontSize}px`,
+                  top: `-${chordFontSize + 8}px`,
+                  border: `1px solid ${chordColor}40`
                 }}
               >
                 {transposedChord}
               </span>
-              <span className="text-gray-700 text-lg leading-relaxed">{word}</span>
+              <span 
+                className="text-gray-800 font-medium"
+                style={{ fontSize: `${lyricFontSize}px` }}
+              >
+                {word}
+              </span>
             </span>
           );
         } else {
           result.push(
-            <span key={`word-${idx}`} className="text-gray-700 text-lg leading-relaxed mr-2">
+            <span 
+              key={`word-${idx}`} 
+              className="text-gray-800 font-medium mr-1"
+              style={{ fontSize: `${lyricFontSize}px` }}
+            >
               {word}
             </span>
           );
@@ -178,7 +190,14 @@ const SongDetailPage = () => {
       });
 
       return (
-        <div key={index} className="leading-10 py-2 min-h-[3rem] text-left">
+        <div 
+          key={index} 
+          className="py-3 text-left flex flex-wrap items-baseline"
+          style={{ 
+            minHeight: `${Math.max(lyricFontSize + chordFontSize + 16, 48)}px`,
+            lineHeight: `${lyricFontSize + 8}px`
+          }}
+        >
           {result}
         </div>
       );
