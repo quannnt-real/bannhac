@@ -120,7 +120,68 @@ const HomePage = () => {
     }, searchTerm ? 500 : 0); // Debounce search
 
     return () => clearTimeout(debounceTimer);
-  }, [searchTerm, sortConfig, pagination.current_page]);
+  }, [searchTerm, sortConfig]);
+
+  // Load more function for infinite scroll
+  const loadMore = async () => {
+    if (loadingMore || !pagination.has_next || isOffline) return;
+    
+    setLoadingMore(true);
+    try {
+      const params = new URLSearchParams({
+        per_page: pagination.per_page.toString(),
+        page: (pagination.current_page + 1).toString()
+      });
+
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm);
+      }
+
+      if (sortConfig.primary.field) {
+        params.append('sort_by', sortConfig.primary.field);
+        params.append('sort_order', sortConfig.primary.order);
+        
+        if (sortConfig.secondary.field) {
+          params.append('sort_by_2', sortConfig.secondary.field);
+          params.append('sort_order_2', sortConfig.secondary.order);
+        }
+      }
+
+      const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+      const response = await fetch(`${BACKEND_URL}/api/proxy/songs?${params}`);
+      const data = await response.json();
+
+      if (data.success) {
+        const newSongs = [...allSongs, ...data.data];
+        setSongs(newSongs);
+        setAllSongs(newSongs);
+        setPagination(data.pagination);
+        localStorage.setItem('songs_data', JSON.stringify(newSongs));
+      }
+    } catch (error) {
+      console.error('Error loading more songs:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Infinite scroll effect
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!pagination.has_next || loadingMore || isOffline) return;
+      
+      const scrollTop = document.documentElement.scrollTop;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = document.documentElement.clientHeight;
+      
+      if (scrollTop + clientHeight >= scrollHeight - 1000) { // Load when 1000px from bottom
+        loadMore();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [pagination.has_next, loadingMore, isOffline, allSongs, searchTerm, sortConfig]);
 
   // Filtered songs (for offline search)
   const filteredSongs = useMemo(() => {
