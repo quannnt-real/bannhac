@@ -34,7 +34,7 @@ const SongDetailPage = () => {
   useEffect(() => {
     const fetchSongDetail = async () => {
       try {
-        const response = await fetch(`https://htnguonsong.com/api/songs/view/${id}`);
+        const response = await fetch(`${BACKEND_URL}/api/proxy/songs/view/${id}`);
         const data = await response.json();
         
         if (data.success) {
