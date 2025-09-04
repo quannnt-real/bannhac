@@ -83,6 +83,20 @@ const SongDetailPage = () => {
     setCurrentKey(newKey);
   };
 
+  const transposeUp = () => {
+    const keys = getAvailableKeys();
+    const currentIndex = keys.indexOf(currentKey);
+    const nextIndex = (currentIndex + 1) % keys.length;
+    setCurrentKey(keys[nextIndex]);
+  };
+
+  const transposeDown = () => {
+    const keys = getAvailableKeys();
+    const currentIndex = keys.indexOf(currentKey);
+    const prevIndex = currentIndex === 0 ? keys.length - 1 : currentIndex - 1;
+    setCurrentKey(keys[prevIndex]);
+  };
+
   const navigateToFavorite = (direction) => {
     if (currentFavoriteIndex === -1) return;
     
