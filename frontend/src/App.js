@@ -1,52 +1,91 @@
-import { useEffect } from "react";
-import "./App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import './App.css';
+import HomePage from './pages/HomePage';
+import SongDetailPage from './pages/SongDetailPage';
+import PlaylistPage from './pages/PlaylistPage';
+import { mockSongs, mockTypes, mockTopics, mockKeyChords } from './data/mockData';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+// Context for managing app state
+const AppContext = React.createContext();
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+export const useAppContext = () => {
+  const context = React.useContext(AppContext);
+  if (!context) {
+    throw new Error('useAppContext must be used within AppProvider');
+  }
+  return context;
+};
 
+const AppProvider = ({ children }) => {
+  const [songs, setSongs] = useState(mockSongs);
+  const [favorites, setFavorites] = useState([]);
+  const [types, setTypes] = useState(mockTypes);
+  const [topics, setTopics] = useState(mockTopics);
+  const [keyChords, setKeyChords] = useState(mockKeyChords);
+  const [isOffline, setIsOffline] = useState(false);
+
+  // Load favorites from localStorage on mount
   useEffect(() => {
-    helloWorldApi();
+    const savedFavorites = localStorage.getItem('songFavorites');
+    if (savedFavorites) {
+      setFavorites(JSON.parse(savedFavorites));
+    }
   }, []);
 
+  // Save favorites to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('songFavorites', JSON.stringify(favorites));
+  }, [favorites]);
+
+  const toggleFavorite = (song) => {
+    setFavorites(prev => {
+      const exists = prev.find(fav => fav.id === song.id);
+      if (exists) {
+        return prev.filter(fav => fav.id !== song.id);
+      } else {
+        return [...prev, song];
+      }
+    });
+  };
+
+  const isFavorite = (songId) => {
+    return favorites.some(fav => fav.id === songId);
+  };
+
+  const value = {
+    songs,
+    setSongs,
+    favorites,
+    setFavorites,
+    toggleFavorite,
+    isFavorite,
+    types,
+    topics,
+    keyChords,
+    isOffline,
+    setIsOffline
+  };
+
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
+    <AppContext.Provider value={value}>
+      {children}
+    </AppContext.Provider>
   );
 };
 
 function App() {
   return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+    <div className="App min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
+      <AppProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/song/:id" element={<SongDetailPage />} />
+            <Route path="/playlist" element={<PlaylistPage />} />
+          </Routes>
+        </BrowserRouter>
+      </AppProvider>
     </div>
   );
 }
