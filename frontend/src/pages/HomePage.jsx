@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, Heart, Filter, ChevronUp } from 'lucide-react';
+import { Music, Heart, Filter, ChevronUp, Wifi, WifiOff } from 'lucide-react';
 import { useAppContext } from '../App';
 import SearchBar from '../components/SearchBar';
 import SongCard from '../components/SongCard';
