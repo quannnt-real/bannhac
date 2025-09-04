@@ -52,10 +52,12 @@ const HomePage = () => {
           }
         }
 
+        const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+        
         const [songsRes, typesRes, topicsRes] = await Promise.all([
-          fetch(`https://htnguonsong.com/api/songs?${params}`),
-          fetch('https://htnguonsong.com/api/songs/types'),
-          fetch('https://htnguonsong.com/api/songs/topics')
+          fetch(`${BACKEND_URL}/api/proxy/songs?${params}`),
+          fetch(`${BACKEND_URL}/api/proxy/songs/types`),
+          fetch(`${BACKEND_URL}/api/proxy/songs/topics`)
         ]);
 
         const [songsData, typesData, topicsData] = await Promise.all([
