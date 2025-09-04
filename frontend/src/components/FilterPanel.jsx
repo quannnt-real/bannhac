@@ -93,7 +93,7 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, onClearSort }) =
                       <SelectValue placeholder="Chọn trường" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">-- Không chọn --</SelectItem>
+                      <SelectItem value="none">-- Không chọn --</SelectItem>
                       {sortFields.map(field => (
                         <SelectItem key={field.value} value={field.value}>
                           {field.label}
