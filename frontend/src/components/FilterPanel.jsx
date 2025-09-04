@@ -21,14 +21,14 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, onClearSort }) =
   const handlePrimarySortChange = (field, order) => {
     onSortChange(prev => ({
       ...prev,
-      primary: { field, order }
+      primary: { field: field === 'none' ? '' : field, order }
     }));
   };
 
   const handleSecondarySortChange = (field, order) => {
     onSortChange(prev => ({
       ...prev,
-      secondary: { field, order }
+      secondary: { field: field === 'none' ? '' : field, order }
     }));
   };
 
