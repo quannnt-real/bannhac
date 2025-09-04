@@ -17,11 +17,11 @@ export const useAppContext = () => {
 };
 
 const AppProvider = ({ children }) => {
-  const [songs, setSongs] = useState(mockSongs);
+  const [songs, setSongs] = useState([]);
   const [favorites, setFavorites] = useState([]);
-  const [types, setTypes] = useState(mockTypes);
-  const [topics, setTopics] = useState(mockTopics);
-  const [keyChords, setKeyChords] = useState(mockKeyChords);
+  const [types, setTypes] = useState([]);
+  const [topics, setTopics] = useState([]);
+  const [keyChords, setKeyChords] = useState(['A', 'Am', 'Bm', 'C', 'D', 'Dm', 'E', 'Eb', 'Em', 'F', 'F#m', 'G']);
   const [isOffline, setIsOffline] = useState(false);
 
   // Load favorites from localStorage on mount
