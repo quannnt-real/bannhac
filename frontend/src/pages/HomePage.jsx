@@ -14,6 +14,7 @@ const HomePage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilter, setShowFilter] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [sortConfig, setSortConfig] = useState({
     primary: { field: '', order: 'asc' },
     secondary: { field: '', order: 'asc' }
@@ -26,6 +27,7 @@ const HomePage = () => {
     has_next: false,
     has_prev: false
   });
+  const [allSongs, setAllSongs] = useState([]);
 
   // Fetch songs from API
   useEffect(() => {
