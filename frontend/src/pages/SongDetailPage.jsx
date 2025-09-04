@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Heart, Palette, Music2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Heart, Music2, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
 import { useAppContext } from '../App';
 import { Button } from '../components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { parseLyrics, transposeChord, getAvailableKeys } from '../utils/chordUtils';
-import { mockSongDetail } from '../data/mockData';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const SongDetailPage = () => {
   const { id } = useParams();
