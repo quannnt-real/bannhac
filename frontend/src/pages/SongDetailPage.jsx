@@ -188,7 +188,14 @@ const SongDetailPage = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Button
-                onClick={() => navigate(-1)}
+                onClick={() => {
+                  // Handle back navigation, especially in offline mode
+                  if (window.history.length > 1) {
+                    navigate(-1);
+                  } else {
+                    navigate('/');
+                  }
+                }}
                 variant="ghost"
                 size="sm"
                 className="p-2"
