@@ -340,13 +340,27 @@ const SongDetailPage = () => {
         </div>
 
         {/* Lyrics */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Lời bài hát</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="font-mono text-lg leading-relaxed space-y-2 p-4 bg-gray-50 rounded-lg">
-              {parsedLyrics.map((line, index) => renderLyricLine(line, index))}
+        <Card className="border-0 shadow-lg">
+          <CardContent className="p-8">
+            <div className="max-w-4xl mx-auto">
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">{song.title}</h2>
+                <div className="flex items-center justify-center gap-4 text-sm text-gray-600">
+                  <span>Tone gốc: <strong>{song.key_chord}</strong></span>
+                  <span>•</span>
+                  <span>Đang chơi: <strong style={{ color: chordColor }}>{currentKey}</strong></span>
+                </div>
+              </div>
+              
+              <div className="bg-gradient-to-br from-blue-50/50 to-white rounded-2xl p-8 space-y-3">
+                {parsedLyrics.map((line, index) => renderLyricLine(line, index))}
+              </div>
+              
+              {song.tempo && (
+                <div className="text-center mt-6 text-sm text-gray-500">
+                  Tempo: {song.tempo} BPM
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
