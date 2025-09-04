@@ -10,12 +10,21 @@ import { Badge } from '../components/ui/badge';
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { songs, favorites, toggleFavorite, isFavorite, types, topics } = useAppContext();
+  const { songs, setSongs, favorites, toggleFavorite, isFavorite, types, setTypes, topics, setTopics, isOffline, setIsOffline } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilter, setShowFilter] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState({
     primary: { field: '', order: 'asc' },
     secondary: { field: '', order: 'asc' }
+  });
+  const [pagination, setPagination] = useState({
+    current_page: 1,
+    per_page: 20,
+    total_items: 0,
+    total_pages: 1,
+    has_next: false,
+    has_prev: false
   });
 
   // Filtered and sorted songs
