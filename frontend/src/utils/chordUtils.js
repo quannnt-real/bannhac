@@ -22,11 +22,11 @@ export const parseLyrics = (lyricText) => {
   const parsedLines = [];
   
   lines.forEach(line => {
-    // Skip section markers like [1], [chorus], [pre-chorus], etc.
-    if (line.match(/^\[(1|2|3|chorus|pre-chorus|bridge|end|verse|outro|intro)\]$/i)) {
+    // Enhanced section markers recognition
+    if (line.match(/^\[(1|2|3|4|5|6|verse|chorus|pre-chorus|bridge|end|outro|intro|hook|interlude|coda|tag|vamp|solo|instrumental|break|refrain|prechorus|postchorus)\]$/i)) {
       parsedLines.push({
         type: 'section',
-        content: line.replace(/[\[\]]/g, '').toUpperCase(),
+        content: line.replace(/[\[\]]/g, ''),
         chords: [],
         text: ''
       });
