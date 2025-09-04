@@ -246,7 +246,7 @@ const HomePage = () => {
       </header>
 
       {/* Main content */}
-      <main className="container mx-auto px-4 py-6 pb-24">
+      <main className="container mx-auto px-4 py-6 pb-32">
         <div className="mb-6">
           <p className="text-gray-600">
             {loading ? (
