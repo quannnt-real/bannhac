@@ -64,6 +64,8 @@ const SongDetailPage = () => {
   useEffect(() => {
     if (song?.lyric) {
       setParsedLyrics(parseLyrics(song.lyric));
+      // Save to localStorage for offline access
+      localStorage.setItem(`song_${song.id}`, JSON.stringify(song));
     }
   }, [song]);
 
