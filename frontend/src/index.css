@@ -16,6 +16,21 @@ code {
         monospace;
 }
 
+/* Smooth transitions for reordering */
+.reorder-transition {
+    transition: all 0.3s ease;
+}
+
+/* Button hover effects */
+.move-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.15);
+}
+
+.move-button:active {
+    transform: translateY(0);
+}
+
 
 
 @layer base {

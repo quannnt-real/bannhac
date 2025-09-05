@@ -1,0 +1,62 @@
+/* Lyrics Display Styles */
+.lyrics-content .lyric-container {
+  line-height: var(--line-height);
+  margin-bottom: 1.5rem;
+}
+
+.lyrics-content .chord-segment {
+  position: relative;
+  display: inline-block;
+  margin-right: 0.25rem;
+  white-space: nowrap;
+}
+
+.lyrics-content .chord-label {
+  position: absolute;
+  left: 0;
+  top: var(--chord-top);
+  font-weight: bold;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: var(--chord-font-size);
+  color: var(--chord-color);
+  background-color: var(--chord-bg);
+  border: 1px solid var(--chord-border);
+  min-width: max-content;
+  line-height: 1;
+  z-index: 1;
+}
+
+.lyrics-content .lyric-word {
+  font-size: var(--lyric-font-size);
+  color: #374151;
+  font-weight: 500;
+  display: inline-block;
+}
+
+.lyrics-content .lyric-word-no-chord {
+  font-size: var(--lyric-font-size);
+  color: #374151;
+  font-weight: 500;
+  display: inline-block;
+  margin-right: 0.25rem;
+  padding-top: var(--text-padding-top);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .lyrics-content .chord-segment {
+    margin-right: 0.2rem;
+  }
+  
+  .lyrics-content .chord-label {
+    padding: 1px 4px;
+    font-size: calc(var(--chord-font-size) * 0.9);
+  }
+  
+  .lyrics-content .lyric-word,
+  .lyrics-content .lyric-word-no-chord {
+    font-size: calc(var(--lyric-font-size) * 0.95);
+  }
+}

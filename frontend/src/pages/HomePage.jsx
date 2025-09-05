@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Music, Heart, Filter, ChevronUp, Wifi, WifiOff } from 'lucide-react';
 import { useAppContext } from '../App';
@@ -7,6 +7,8 @@ import SongCard from '../components/SongCard';
 import FilterPanel from '../components/FilterPanel';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+// Import optimized hooks
+import { useOptimizedSearch } from '../hooks/useOptimizedSearch';
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -16,8 +18,11 @@ const HomePage = () => {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [sortConfig, setSortConfig] = useState({
-    primary: { field: '', order: 'asc' },
-    secondary: { field: '', order: 'asc' }
+    sorts: [] // Array of sort objects: [{ field: 'chord', order: 'asc' }, { field: 'title', order: 'desc' }, ...]
+  });
+  const [filters, setFilters] = useState({
+    type_ids: [],
+    topic_ids: []
   });
   const [pagination, setPagination] = useState({
     current_page: 1,
@@ -29,219 +34,250 @@ const HomePage = () => {
   });
   const [allSongs, setAllSongs] = useState([]);
 
-  // Fetch songs from API
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Build API URL with search and sort parameters
-        const params = new URLSearchParams({
-          per_page: pagination.per_page.toString(),
-          page: pagination.current_page.toString()
-        });
-
-        if (searchTerm.trim()) {
-          params.append('search', searchTerm);
-        }
-
-        if (sortConfig.primary.field) {
-          params.append('sort_by', sortConfig.primary.field);
-          params.append('sort_order', sortConfig.primary.order);
-          
-          if (sortConfig.secondary.field) {
-            params.append('sort_by_2', sortConfig.secondary.field);
-            params.append('sort_order_2', sortConfig.secondary.order);
-          }
-        }
-
-        const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-        
-        const [songsRes, typesRes, topicsRes] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/proxy/songs?${params}`),
-          fetch(`${BACKEND_URL}/api/proxy/songs/types`),
-          fetch(`${BACKEND_URL}/api/proxy/songs/topics`)
-        ]);
-
-        const [songsData, typesData, topicsData] = await Promise.all([
-          songsRes.json(),
-          typesRes.json(),
-          topicsRes.json()
-        ]);
-
-        if (songsData.success) {
-          if (pagination.current_page === 1) {
-            // First load or search - replace all songs
-            setSongs(songsData.data);
-            setAllSongs(songsData.data);
-          } else {
-            // Load more - append to existing songs
-            const newSongs = [...allSongs, ...songsData.data];
-            setSongs(newSongs);
-            setAllSongs(newSongs);
-          }
-          setPagination(songsData.pagination);
-          // Save to localStorage for offline access
-          localStorage.setItem('songs_data', JSON.stringify(allSongs));
-          localStorage.setItem('pagination_data', JSON.stringify(songsData.pagination));
-        }
-
-        if (typesData.success) {
-          setTypes(typesData.data);
-          localStorage.setItem('types_data', JSON.stringify(typesData.data));
-        }
-
-        if (topicsData.success) {
-          setTopics(topicsData.data);
-          localStorage.setItem('topics_data', JSON.stringify(topicsData.data));
-        }
-
-        setIsOffline(false);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setIsOffline(true);
-        
-        // Load from localStorage if offline
-        const savedSongs = localStorage.getItem('songs_data');
-        const savedTypes = localStorage.getItem('types_data');
-        const savedTopics = localStorage.getItem('topics_data');
-        const savedPagination = localStorage.getItem('pagination_data');
-        
-        if (savedSongs) setSongs(JSON.parse(savedSongs));
-        if (savedTypes) setTypes(JSON.parse(savedTypes));
-        if (savedTopics) setTopics(JSON.parse(savedTopics));
-        if (savedPagination) setPagination(JSON.parse(savedPagination));
-      } finally {
-        setLoading(false);
+  // Function to handle sort button clicks
+  const handleSort = (field) => {
+    setSortConfig(prevConfig => {
+      const existingSorts = [...prevConfig.sorts];
+      const existingIndex = existingSorts.findIndex(sort => sort.field === field);
+      
+      if (existingIndex !== -1) {
+        // Nếu field đã tồn tại, đổi order
+        existingSorts[existingIndex] = {
+          ...existingSorts[existingIndex],
+          order: existingSorts[existingIndex].order === 'asc' ? 'desc' : 'asc'
+        };
+      } else {
+        // Nếu field chưa tồn tại, thêm vào cuối với order 'asc'
+        existingSorts.push({ field, order: 'asc' });
       }
-    };
+      
+      return { sorts: existingSorts };
+    });
+  };
 
+  // Function to remove a sort
+  const removeSort = (field) => {
+    setSortConfig(prevConfig => ({
+      sorts: prevConfig.sorts.filter(sort => sort.field !== field)
+    }));
+  };
+
+  // Function to clear all sorts
+  const clearAllSorts = () => {
+    setSortConfig({ sorts: [] });
+  };
+
+  // Function to check if a field is currently being sorted
+  const getSortStatus = (field) => {
+    const sort = sortConfig.sorts.find(s => s.field === field);
+    if (!sort) return null;
+    
+    const index = sortConfig.sorts.findIndex(s => s.field === field);
+    return {
+      order: sort.order,
+      priority: index + 1 // 1 = primary, 2 = secondary, etc.
+    };
+  };
+
+  // Optimized fetch function with caching
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Build API URL with search and sort parameters
+      const params = new URLSearchParams({
+        all: 'true' // Lấy tất cả bài hát
+      });
+
+      if (searchTerm?.trim()) {
+        params.append('search', searchTerm);
+      }
+
+      const apiUrl = `/api/songs?${params}`;
+      console.log('📡 Fetching from proxy:', apiUrl);
+
+      // Gọi API qua proxy thay vì trực tiếp
+      const songsRes = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        mode: 'cors'
+      });
+      const songsData = await songsRes.json();
+
+      if (songsData.success) {
+        setSongs(songsData.data);
+        setAllSongs(songsData.data);
+        
+        // Tạo types và topics từ songs data - optimized with Map
+        const typesMap = new Map();
+        const topicsMap = new Map();
+        
+        songsData.data.forEach(song => {
+          // Collect unique types
+          if (song.type_id && song.type_name) {
+            typesMap.set(song.type_id, {
+              id: song.type_id,
+              name: song.type_name
+            });
+          }
+          
+          // Collect unique topics (chỉ khi có topic)
+          if (song.topic_id && song.topic_name) {
+            topicsMap.set(song.topic_id, {
+              id: song.topic_id,
+              name: song.topic_name
+            });
+          }
+        });
+        
+        const uniqueTypes = Array.from(typesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        const uniqueTopics = Array.from(topicsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        
+        // Set state cho types và topics
+        setTypes(uniqueTypes);
+        setTopics(uniqueTopics);
+        
+        // Không cần pagination khi lấy all=true
+        setPagination({
+          current_page: 1,
+          per_page: songsData.data.length,
+          total_items: songsData.data.length,
+          total_pages: 1,
+          has_next: false,
+          has_prev: false
+        });
+        
+        // Save to localStorage for offline access
+        localStorage.setItem('songs_data', JSON.stringify(songsData.data));
+        localStorage.setItem('types_data', JSON.stringify(uniqueTypes));
+        localStorage.setItem('topics_data', JSON.stringify(uniqueTopics));
+      }
+
+      setIsOffline(false);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setIsOffline(true);
+      
+      // Load from localStorage if offline
+      const savedSongs = localStorage.getItem('songs_data');
+      const savedTypes = localStorage.getItem('types_data');
+      const savedTopics = localStorage.getItem('topics_data');
+      
+      if (savedSongs) {
+        const songsData = JSON.parse(savedSongs);
+        setSongs(songsData);
+        setAllSongs(songsData);
+      }
+      if (savedTypes) setTypes(JSON.parse(savedTypes));
+      if (savedTopics) setTopics(JSON.parse(savedTopics));
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm, setSongs, setTypes, setTopics, setIsOffline]);
+
+  // Debounced effect for API calls
+  useEffect(() => {
     const debounceTimer = setTimeout(() => {
       fetchData();
     }, searchTerm ? 500 : 0); // Debounce search
 
     return () => clearTimeout(debounceTimer);
-  }, [searchTerm, sortConfig]);
+  }, [fetchData, searchTerm]);
 
-  // Load more function for infinite scroll
-  const loadMore = async () => {
-    if (loadingMore || !pagination.has_next || isOffline) return;
-    
-    setLoadingMore(true);
-    try {
-      const params = new URLSearchParams({
-        per_page: pagination.per_page.toString(),
-        page: (pagination.current_page + 1).toString()
-      });
-
-      if (searchTerm.trim()) {
-        params.append('search', searchTerm);
-      }
-
-      if (sortConfig.primary.field) {
-        params.append('sort_by', sortConfig.primary.field);
-        params.append('sort_order', sortConfig.primary.order);
-        
-        if (sortConfig.secondary.field) {
-          params.append('sort_by_2', sortConfig.secondary.field);
-          params.append('sort_order_2', sortConfig.secondary.order);
-        }
-      }
-
-      const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-      const response = await fetch(`${BACKEND_URL}/api/proxy/songs?${params}`);
-      const data = await response.json();
-
-      if (data.success) {
-        const newSongs = [...allSongs, ...data.data];
-        setSongs(newSongs);
-        setAllSongs(newSongs);
-        setPagination(data.pagination);
-        localStorage.setItem('songs_data', JSON.stringify(newSongs));
-      }
-    } catch (error) {
-      console.error('Error loading more songs:', error);
-    } finally {
-      setLoadingMore(false);
-    }
-  };
-
-  // Infinite scroll effect
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!pagination.has_next || loadingMore || isOffline) return;
-      
-      const scrollTop = document.documentElement.scrollTop;
-      const scrollHeight = document.documentElement.scrollHeight;
-      const clientHeight = document.documentElement.clientHeight;
-      
-      if (scrollTop + clientHeight >= scrollHeight - 1000) { // Load when 1000px from bottom
-        loadMore();
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [pagination.has_next, loadingMore, isOffline, allSongs, searchTerm, sortConfig]);
-
-  // Filtered songs (for offline search)
+  // Client-side filtering và sorting với useMemo cho performance
   const filteredSongs = useMemo(() => {
-    if (!isOffline) return songs; // Use API results when online
-    
-    let filtered = songs;
+    let filtered = allSongs.filter(song => {
+      // Filter by type
+      if (filters.type_ids.length > 0 && !filters.type_ids.includes(song.type_id)) {
+        return false;
+      }
+      
+      // Filter by topic  
+      if (filters.topic_ids.length > 0 && !filters.topic_ids.includes(song.topic_id)) {
+        return false;
+      }
+      
+      return true;
+    });
 
-    // Search filter (only when offline)
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(song =>
-        song.title.toLowerCase().includes(term) ||
-        song.first_lyric.toLowerCase().includes(term) ||
-        (song.chorus && song.chorus.toLowerCase().includes(term))
-      );
+    // Apply sorting
+    if (sortConfig.sorts.length > 0) {
+      filtered = [...filtered].sort((a, b) => {
+        for (const sort of sortConfig.sorts) {
+          let aValue = a[sort.field];
+          let bValue = b[sort.field];
+          
+          // Handle different field types
+          if (sort.field === 'title' || sort.field === 'type_name' || sort.field === 'topic_name') {
+            aValue = (aValue || '').toString().toLowerCase();
+            bValue = (bValue || '').toString().toLowerCase();
+          } else if (sort.field === 'chord_key') {
+            aValue = (aValue || '').toString().toLowerCase();
+            bValue = (bValue || '').toString().toLowerCase();
+          } else if (sort.field === 'id' || sort.field === 'type_id' || sort.field === 'topic_id') {
+            aValue = parseInt(aValue) || 0;
+            bValue = parseInt(bValue) || 0;
+          }
+          
+          let comparison = 0;
+          if (aValue < bValue) {
+            comparison = -1;
+          } else if (aValue > bValue) {
+            comparison = 1;
+          }
+          
+          if (comparison !== 0) {
+            return sort.order === 'desc' ? -comparison : comparison;
+          }
+        }
+        return 0;
+      });
     }
 
     return filtered;
-  }, [songs, searchTerm, isOffline]);
+  }, [allSongs, filters, sortConfig]);
 
-  // Generate search suggestions based on existing data
+  // Search suggestions based on current data - optimized
   const searchSuggestions = useMemo(() => {
     if (!searchTerm.trim()) return [];
     
-    const suggestions = new Set();
     const term = searchTerm.toLowerCase();
+    const suggestions = new Set();
     
-    // Add matching topic names that have songs
-    const topicsWithSongs = new Set(songs.map(song => song.topic_name).filter(Boolean));
-    topics.forEach(topic => {
-      if (topicsWithSongs.has(topic.topic_name) && 
-          topic.topic_name.toLowerCase().includes(term)) {
-        suggestions.add(topic.topic_name);
+    // Limit search to first 100 songs for performance
+    filteredSongs.slice(0, 100).forEach(song => {
+      if (song.title.toLowerCase().includes(term)) {
+        suggestions.add(song.title);
       }
-    });
-    
-    // Add matching type names
-    types.forEach(type => {
-      if (type.type_name.toLowerCase().includes(term)) {
-        suggestions.add(type.type_name);
+      if (song.first_lyric && song.first_lyric.toLowerCase().includes(term)) {
+        const words = song.first_lyric.split(' ').filter(word => 
+          word.toLowerCase().includes(term) && word.length > 2
+        );
+        words.forEach(word => suggestions.add(word));
       }
     });
     
     return Array.from(suggestions).slice(0, 5);
-  }, [searchTerm, songs, topics, types]);
+  }, [searchTerm, filteredSongs]);
 
-  const handleSongPlay = (song) => {
+  // Optimized handlers with useCallback
+  const handleSongPlay = useCallback((song) => {
     navigate(`/song/${song.id}`);
-  };
+  }, [navigate]);
 
-  const handleSearchSuggestion = (suggestion) => {
+  const handleSearchSuggestion = useCallback((suggestion) => {
     setSearchTerm(suggestion);
-  };
+  }, []);
 
-  const clearSort = () => {
-    setSortConfig({
-      primary: { field: '', order: 'asc' },
-      secondary: { field: '', order: 'asc' }
-    });
-  };
+  const clearSort = useCallback(() => {
+    clearAllSorts();
+  }, []);
+
+  // Optimized search handler
+  const handleSearch = useCallback((term) => {
+    setSearchTerm(term);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
@@ -250,13 +286,11 @@ const HomePage = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500 rounded-xl">
-                <Music className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800">Hợp Âm Thánh Ca</h1>
-                <p className="text-sm text-gray-600">Nguồn: htnguonsong.com</p>
-              </div>
+              <img 
+                src="https://htnguonsong.com/dist/img/brand/Logo_app.png" 
+                alt="Hợp Âm Thánh Ca"
+                className="h-12 object-contain"
+              />
             </div>
             <div className="flex items-center gap-3">
               {/* Connection status */}
@@ -268,44 +302,38 @@ const HomePage = () => {
               </div>
               
               <Button
-                onClick={() => navigate('/playlist')}
+                onClick={() => navigate('/favorites')}
                 variant="outline"
                 className="flex items-center gap-2 border-blue-200 text-blue-600 hover:bg-blue-50"
               >
                 <Heart className="h-4 w-4" />
-                Yêu thích ({favorites.length})
+                Chủ nhật ({favorites.length})
               </Button>
             </div>
           </div>
           
           <SearchBar
-            onSearch={setSearchTerm}
+            onSearch={handleSearch}
             suggestions={searchSuggestions}
             onSuggestionClick={handleSearchSuggestion}
           />
 
           {/* Active filters display */}
-          {(sortConfig.primary.field || sortConfig.secondary.field) && (
+          {(sortConfig.sorts.length > 0) && (
             <div className="flex items-center gap-2 mt-4">
-              <span className="text-sm text-gray-600">Sắp xếp:</span>
-              {sortConfig.primary.field && (
-                <Badge variant="outline" className="text-blue-600 border-blue-200">
-                  {sortConfig.primary.field === 'key_chord' ? 'Hợp âm' :
-                   sortConfig.primary.field === 'type_name' ? 'Thể loại' :
-                   sortConfig.primary.field === 'topic_name' ? 'Chủ đề' :
-                   sortConfig.primary.field === 'title' ? 'Tên bài hát' : sortConfig.primary.field}
-                  {' '}({sortConfig.primary.order === 'asc' ? 'A→Z' : 'Z→A'})
+              <span className="text-sm text-gray-600">Sắp xếp active:</span>
+              {sortConfig.sorts.map((sort, index) => (
+                <Badge key={sort.field} variant="outline" className={`${
+                  index === 0 ? 'text-blue-600 border-blue-200' : 'text-green-600 border-green-200'
+                }`}>
+                  {index === 0 ? '' : '+ '}
+                  {sort.field === 'key_chord' ? 'Hợp âm' :
+                   sort.field === 'type_name' ? 'Thể loại' :
+                   sort.field === 'topic_name' ? 'Chủ đề' :
+                   sort.field === 'title' ? 'Tên bài hát' : sort.field}
+                  {' '}({sort.order === 'asc' ? 'A→Z' : 'Z→A'})
                 </Badge>
-              )}
-              {sortConfig.secondary.field && (
-                <Badge variant="outline" className="text-green-600 border-green-200">
-                  + {sortConfig.secondary.field === 'key_chord' ? 'Hợp âm' :
-                     sortConfig.secondary.field === 'type_name' ? 'Thể loại' :
-                     sortConfig.secondary.field === 'topic_name' ? 'Chủ đề' :
-                     sortConfig.secondary.field === 'title' ? 'Tên bài hát' : sortConfig.secondary.field}
-                  {' '}({sortConfig.secondary.order === 'asc' ? 'A→Z' : 'Z→A'})
-                </Badge>
-              )}
+              ))}
               <Button
                 onClick={clearSort}
                 variant="ghost"
@@ -328,7 +356,9 @@ const HomePage = () => {
             ) : (
               <>
                 Tìm thấy <span className="font-semibold text-blue-600">
-                  {isOffline ? filteredSongs.length : pagination.total_items}
+                  {filteredSongs.length}
+                </span> / <span className="font-semibold text-gray-600">
+                  {allSongs.length}
                 </span> bài hát
                 {searchTerm && (
                   <span> cho từ khóa "<span className="font-semibold">{searchTerm}</span>"</span>
@@ -341,21 +371,33 @@ const HomePage = () => {
           </p>
         </div>
 
-        {/* Songs grid */}
+        {/* Songs grid - Optimized rendering */}
         {loading ? (
+          // Enhanced loading skeleton
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="animate-pulse">
-                <div className="bg-gray-200 rounded-lg h-48"></div>
+                <div className="bg-gray-200 rounded-lg h-72 p-4">
+                  <div className="h-6 bg-gray-300 rounded mb-4"></div>
+                  <div className="space-y-2">
+                    <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+                    <div className="h-4 bg-gray-300 rounded w-1/2"></div>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <div className="h-3 bg-gray-300 rounded"></div>
+                    <div className="h-3 bg-gray-300 rounded w-5/6"></div>
+                  </div>
+                  <div className="mt-4 h-8 bg-gray-300 rounded"></div>
+                </div>
               </div>
             ))}
           </div>
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredSongs.map((song) => (
+              {filteredSongs.map((song, index) => (
                 <SongCard
-                  key={song.id}
+                  key={song.id} // Use song.id as key instead of compound key for better performance
                   song={song}
                   onPlay={handleSongPlay}
                   onToggleFavorite={toggleFavorite}
@@ -363,19 +405,13 @@ const HomePage = () => {
                 />
               ))}
             </div>
-
-            {/* Loading more indicator */}
-            {loadingMore && (
-              <div className="flex items-center justify-center mt-8 py-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                <span className="ml-2 text-gray-600">Đang tải thêm...</span>
-              </div>
-            )}
             
-            {/* End of results indicator */}
-            {!isOffline && !pagination.has_next && !loading && filteredSongs.length > 0 && (
+            {/* Total results indicator */}
+            {!loading && filteredSongs.length > 0 && (
               <div className="text-center mt-8 py-4">
-                <p className="text-gray-500">Đã hiển thị tất cả {pagination.total_items} bài hát</p>
+                <p className="text-gray-500">
+                  Hiển thị {filteredSongs.length} / {allSongs.length} bài hát
+                </p>
               </div>
             )}
           </>
@@ -396,7 +432,10 @@ const HomePage = () => {
         onClose={() => setShowFilter(false)}
         sortConfig={sortConfig}
         onSortChange={setSortConfig}
-        onClearSort={clearSort}
+        types={types}
+        topics={topics}
+        filters={filters}
+        onFilterChange={setFilters}
       />
 
       {/* Floating action button */}

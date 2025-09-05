@@ -4,6 +4,8 @@ import './App.css';
 import HomePage from './pages/HomePage';
 import SongDetailPage from './pages/SongDetailPage';
 import PlaylistPage from './pages/PlaylistPage';
+import SharedPlaylistPage from './pages/SharedPlaylistPage';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Context for managing app state
 const AppContext = React.createContext();
@@ -28,13 +30,27 @@ const AppProvider = ({ children }) => {
   useEffect(() => {
     const savedFavorites = localStorage.getItem('songFavorites');
     if (savedFavorites) {
-      setFavorites(JSON.parse(savedFavorites));
+      try {
+        const favoritesData = JSON.parse(savedFavorites);
+        if (Array.isArray(favoritesData)) {
+          setFavorites(favoritesData);
+        }
+      } catch (error) {
+        console.error('Error loading favorites from localStorage:', error);
+        // Clear corrupted data
+        localStorage.removeItem('songFavorites');
+      }
     }
   }, []);
 
   // Save favorites to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem('songFavorites', JSON.stringify(favorites));
+    if (favorites.length > 0) {
+      localStorage.setItem('songFavorites', JSON.stringify(favorites));
+    } else {
+      // Remove the key when no favorites to avoid loading empty array
+      localStorage.removeItem('songFavorites');
+    }
   }, [favorites]);
 
   const toggleFavorite = (song) => {
@@ -79,15 +95,18 @@ const AppProvider = ({ children }) => {
 function App() {
   return (
     <div className="App min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
-      <AppProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/song/:id" element={<SongDetailPage />} />
-            <Route path="/playlist" element={<PlaylistPage />} />
-          </Routes>
-        </BrowserRouter>
-      </AppProvider>
+      <ErrorBoundary>
+        <AppProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/song/:id" element={<SongDetailPage />} />
+              <Route path="/favorites" element={<PlaylistPage />} />
+              <Route path="/playlist" element={<SharedPlaylistPage />} />
+            </Routes>
+          </BrowserRouter>
+        </AppProvider>
+      </ErrorBoundary>
     </div>
   );
 }
