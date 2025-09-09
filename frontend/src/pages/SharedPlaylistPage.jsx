@@ -9,6 +9,7 @@ import { Input } from '../components/ui/input';
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import SongCard from '../components/SongCard';
 import SharePanel from '../components/SharePanel';
+import { storeKeys, retrieveKeys } from '../utils/keyStorage';
 
 const SharedPlaylistPage = () => {
   // Set page title
@@ -56,29 +57,16 @@ const SharedPlaylistPage = () => {
   
   // Parse song keys từ URL with enhanced safety checks
   const keysParam = searchParams.get('keys');
-  const sharedKeys = keysParam ? (() => {
+  const sharedKeys = useMemo(() => {
+    if (!keysParam) return {};
+    
     try {
-      let decodedKeys = keysParam;
-      // Support both encoded and unencoded URLs
-      if (keysParam.includes('%7B') || keysParam.includes('%22')) {
-        // URL is encoded, decode it
-        decodedKeys = decodeURIComponent(keysParam);
-      }
-      
-      const parsed = JSON.parse(decodedKeys);
-      
-      // Validate the parsed object
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return parsed;
-      } else {
-        console.warn('Invalid keys format - not an object');
-        return {};
-      }
+      return retrieveKeys(keysParam);
     } catch (error) {
-      console.warn('Error parsing keys parameter:', error);
+      console.error('Error retrieving shared keys:', error);
       return {};
     }
-  })() : {};
+  }, [keysParam]);
 
   useEffect(() => {
     const fetchPlaylistSongs = async () => {
@@ -366,8 +354,9 @@ const SharedPlaylistPage = () => {
     try {
       // Include song keys in the navigation params with safety check
       const keysToShare = songKeys || {};
-      const keysJson = JSON.stringify(keysToShare);
-      navigate(`/song/${song.id}?playlist=${playlistSongIds.join(',')}&index=${currentIndex}&from=shared&keys=${keysJson}`);
+      const encodedKeys = storeKeys(keysToShare);
+      
+      navigate(`/song/${song.id}?playlist=${playlistSongIds.join(',')}&index=${currentIndex}&from=shared&keys=${encodedKeys}`);
     } catch (error) {
       console.error('Error navigating to song:', error);
       // Fallback without keys
@@ -429,17 +418,10 @@ const SharedPlaylistPage = () => {
       });
       
       if (Object.keys(relevantKeys).length > 0) {
-        // Tạo URL đẹp hơn - không encode các ký tự cơ bản
-        const keysJson = JSON.stringify(relevantKeys);
-        // Replace encoded characters with raw characters for better readability
-        const prettyKeys = keysJson
-          .replace(/"/g, '"')
-          .replace(/\{/g, '{')
-          .replace(/\}/g, '}')
-          .replace(/,/g, ',')
-          .replace(/:/g, ':');
+        // Encode JSON string properly for URL
+        const encodedKeys = storeKeys(relevantKeys);
         
-        newUrl += `&keys=${prettyKeys}`;
+        newUrl += `&keys=${encodedKeys}`;
       }
     }
     

@@ -10,6 +10,7 @@ import { parseLyrics, transposeChord, getAvailableKeys } from '../utils/chordUti
 import { API_ENDPOINTS, apiCall } from '../utils/apiConfig';
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
+import { retrieveKeys, cleanupOldKeys, storeKeys } from '../utils/keyStorage';
 import '../components/LyricsDisplay.css';
 
 const SongDetailPage = () => {
@@ -28,16 +29,14 @@ const SongDetailPage = () => {
   const currentPlaylistIndex = indexParam ? parseInt(indexParam) : -1;
   
   // Parse shared keys with safety checks
-  const sharedKeys = keysParam ? (() => {
-    try {
-      const decoded = decodeURIComponent(keysParam);
-      const parsed = JSON.parse(decoded);
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (error) {
-      console.warn('Error parsing shared keys:', error);
-      return {};
-    }
-  })() : {};
+  const sharedKeys = useMemo(() => {
+    if (!keysParam) return {};
+    
+    // Clean up old keys on component mount
+    cleanupOldKeys();
+    
+    return retrieveKeys(keysParam);
+  }, [keysParam]);
 
   // Extract all unique chords from parsed lyrics in order of appearance
   const extractUniqueChords = (parsedLyrics) => {
@@ -431,9 +430,10 @@ const SongDetailPage = () => {
       const playlistIds = playlistSongs.map(s => s.id).join(',');
       let navUrl = `/song/${nextSong.id}?playlist=${playlistIds}&index=${newIndex}&from=${fromParam}`;
       
-      // Only add keys if they exist from original navigation
-      if (keysParam) {
-        navUrl += `&keys=${keysParam}`;
+      // Re-encode keys properly for navigation
+      if (Object.keys(sharedKeys).length > 0) {
+        const encodedKeys = storeKeys(sharedKeys);
+        navUrl += `&keys=${encodedKeys}`;
       }
       
       navigate(navUrl);
@@ -448,8 +448,9 @@ const SongDetailPage = () => {
     } else if (fromParam === 'shared' && playlistParam) {
       // Include keys when going back to shared playlist
       let backUrl = `/playlist?songs=${playlistParam}`;
-      if (keysParam) {
-        backUrl += `&keys=${keysParam}`;
+      if (Object.keys(sharedKeys).length > 0) {
+        const encodedKeys = storeKeys(sharedKeys);
+        backUrl += `&keys=${encodedKeys}`;
       }
       navigate(backUrl);
     } else {

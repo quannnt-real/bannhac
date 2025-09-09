@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { X, Import, Check, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
+import { storeKeys } from '../utils/keyStorage';
 
 const ImportPanel = ({ isOpen, onClose }) => {
   const [importCode, setImportCode] = useState('');
@@ -94,8 +95,8 @@ const ImportPanel = ({ isOpen, onClose }) => {
       
       // Add keys if they exist
       if (Object.keys(parseResult.keys).length > 0) {
-        const keysJson = JSON.stringify(parseResult.keys);
-        playlistUrl += `&keys=${keysJson}`;
+        const encodedKeys = storeKeys(parseResult.keys);
+        playlistUrl += `&keys=${encodedKeys}`;
       }
       
       // Add date if it exists

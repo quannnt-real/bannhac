@@ -8,6 +8,7 @@ import { Badge } from '../components/ui/badge';
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import SongCard from '../components/SongCard';
 import SharePanel from '../components/SharePanel';
+import { storeKeys } from '../utils/keyStorage';
 
 const PlaylistPage = () => {
   // Set page title
@@ -149,8 +150,10 @@ const PlaylistPage = () => {
     
     // Include song keys in the navigation params
     try {
-      const keysJson = JSON.stringify(songKeys || {});
-      navigate(`/song/${song.id}?playlist=${favoriteSongIds.join(',')}&index=${currentIndex}&from=favorites&keys=${keysJson}`);
+      const keysToEncode = songKeys || {};
+      const encodedKeys = storeKeys(keysToEncode);
+      
+      navigate(`/song/${song.id}?playlist=${favoriteSongIds.join(',')}&index=${currentIndex}&from=favorites&keys=${encodedKeys}`);
     } catch (error) {
       console.error('Error navigating to song:', error);
       // Fallback without keys
@@ -237,16 +240,9 @@ const PlaylistPage = () => {
         if (Object.keys(relevantKeys).length > 0) {
           try {
             // Tạo URL đẹp hơn - không encode các ký tự cơ bản
-            const keysJson = JSON.stringify(relevantKeys);
-            // Replace encoded characters with raw characters for better readability
-            const prettyKeys = keysJson
-              .replace(/"/g, '"')
-              .replace(/\{/g, '{')
-              .replace(/\}/g, '}')
-              .replace(/,/g, ',')
-              .replace(/:/g, ':');
+            const encodedKeys = storeKeys(relevantKeys);
             
-            shareUrl += `&keys=${prettyKeys}`;
+            shareUrl += `&keys=${encodedKeys}`;
           } catch (error) {
             console.warn('Error encoding keys, sharing without keys:', error);
           }
