@@ -1,96 +1,161 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Heart, Music, Trash2, Share2, Edit3, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAppContext } from '../App';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import SongCard from '../components/SongCard';
+import SharePanel from '../components/SharePanel';
 
 const PlaylistPage = () => {
+  // Set page title
+  usePageTitle(createPageTitle('Danh sách bài hát buổi thờ phượng'));
+  
   const navigate = useNavigate();
   const { favorites, toggleFavorite, isFavorite, setFavorites } = useAppContext();
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [orderedFavorites, setOrderedFavorites] = useState([]);
+  const [songKeys, setSongKeys] = useState({}); // Store custom keys for each song
+  const [showSharePanel, setShowSharePanel] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
+  const [currentShareUrl, setCurrentShareUrl] = useState('');
+  const [displayDate, setDisplayDate] = useState(''); // Store formatted date for display
 
   // Load ordered favorites from localStorage on mount or when favorites change
   useEffect(() => {
-    console.log('Favorites changed:', favorites.length, 'songs');
-    
     if (favorites.length === 0) {
       setOrderedFavorites([]);
       return;
     }
 
-    const savedOrder = localStorage.getItem('favoritesOrder');
+    // Kiểm tra xem có đang ở chế độ reorder không
+    if (isReorderMode) {
+      return; // Không làm gì khi đang reorder
+    }
+
+    const savedOrder = localStorage.getItem('favorites_order');
     
     if (savedOrder) {
       try {
         const orderIds = JSON.parse(savedOrder);
-        console.log('Saved order found:', orderIds);
         
-        // Reorder favorites based on saved order
-        const orderedList = [];
-        const remainingSongs = [...favorites];
+        // Tạo ordered list dựa trên saved order
+        const ordered = [];
+        const favoritesMap = new Map(favorites.map(song => [song.id, song]));
         
-        // Add songs in saved order
+        // Thêm songs theo thứ tự đã lưu
         orderIds.forEach(id => {
-          const song = remainingSongs.find(s => s.id === id);
-          if (song) {
-            orderedList.push(song);
-            const index = remainingSongs.findIndex(s => s.id === id);
-            if (index > -1) remainingSongs.splice(index, 1);
+          if (favoritesMap.has(id)) {
+            ordered.push(favoritesMap.get(id));
+            favoritesMap.delete(id);
           }
         });
         
-        // Add any new songs that weren't in the saved order
-        orderedList.push(...remainingSongs);
+        // Thêm các songs mới (chưa có trong order) vào cuối
+        favoritesMap.forEach(song => ordered.push(song));
         
-        console.log('Final ordered list:', orderedList.length, 'songs');
-        setOrderedFavorites(orderedList);
-        
-        // Update the global favorites to match the order if needed
-        if (orderedList.length === favorites.length && setFavorites) {
-          const needsReorder = orderedList.some((song, index) => 
-            favorites[index]?.id !== song.id
-          );
-          
-          if (needsReorder) {
-            console.log('Updating global favorites with saved order');
-            setFavorites(orderedList);
-          }
-        }
+        // Always set the ordered list - let React optimize re-renders
+        setOrderedFavorites(ordered);
         
       } catch (error) {
-        console.error('Error parsing saved order:', error);
-        setOrderedFavorites(favorites);
-        localStorage.removeItem('favoritesOrder'); // Remove corrupted data
+        console.error('Error loading favorites order:', error);
+        setOrderedFavorites([...favorites]);
       }
     } else {
-      console.log('No saved order found, using default order');
-      setOrderedFavorites(favorites);
+      // No saved order, use favorites as-is
+      setOrderedFavorites([...favorites]);
     }
-  }, [favorites, setFavorites]);
+  }, [favorites, isReorderMode]); // Safe dependencies only
 
-  // Save order to localStorage whenever orderedFavorites changes
+  // Handle date parameter for display (not document title)
   useEffect(() => {
-    if (orderedFavorites.length > 0) {
-      const orderIds = orderedFavorites.map(song => song.id);
-      localStorage.setItem('favoritesOrder', JSON.stringify(orderIds));
-      console.log('Saved order to localStorage:', orderIds);
+    const urlParams = new URLSearchParams(window.location.search);
+    const dateParam = urlParams.get('date');
+    
+    if (dateParam) {
+      try {
+        const date = new Date(dateParam);
+        const options = { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        };
+        const formattedDate = date.toLocaleDateString('vi-VN', options);
+        setDisplayDate(formattedDate);
+        
+      } catch (error) {
+        console.error('Error parsing date parameter:', error);
+        setDisplayDate('');
+      }
     } else {
-      localStorage.removeItem('favoritesOrder');
-      console.log('Removed order from localStorage');
+      setDisplayDate('');
     }
-  }, [orderedFavorites]);
+  }, []);
+
+  // Load saved song keys from localStorage
+  useEffect(() => {
+    const savedKeys = localStorage.getItem('playlist_song_keys');
+    if (savedKeys) {
+      try {
+        const parsedKeys = JSON.parse(savedKeys);
+        setSongKeys(parsedKeys);
+      } catch (error) {
+        console.error('Error loading saved song keys:', error);
+        // Clear corrupted data
+        localStorage.removeItem('playlist_song_keys');
+      }
+    }
+    
+    // Cleanup function (optional, for edge cases)
+    return () => {
+      // Any cleanup if needed
+    };
+  }, []);
+
+  // Function to save order to localStorage - memoized to prevent re-creation
+  const saveOrder = useCallback((newOrder) => {
+    const orderIds = newOrder.map(song => song.id);
+    localStorage.setItem('favorites_order', JSON.stringify(orderIds));
+  }, []);
+
+  // Function to save song keys to localStorage
+  const saveSongKeys = useCallback((keys) => {
+    localStorage.setItem('playlist_song_keys', JSON.stringify(keys));
+  }, []);
+
+  // Function to update song key
+  const updateSongKey = useCallback((songId, newKey) => {
+    setSongKeys(prev => {
+      const updated = { ...prev, [songId]: newKey };
+      saveSongKeys(updated);
+      return updated;
+    });
+  }, [saveSongKeys]);
 
   const handleSongPlay = (song) => {
     // Use current display list for playlist context
-    const currentList = isReorderMode ? orderedFavorites : orderedFavorites;
+    const currentList = orderedFavorites; // Remove redundant logic
     const favoriteSongIds = currentList.map(s => s.id);
     const currentIndex = currentList.findIndex(s => s.id === song.id);
     
-    navigate(`/song/${song.id}?playlist=${favoriteSongIds.join(',')}&index=${currentIndex}&from=favorites`);
+    // Safety check
+    if (currentIndex === -1) {
+      console.warn('Song not found in current playlist');
+      return;
+    }
+    
+    // Include song keys in the navigation params
+    try {
+      const keysJson = JSON.stringify(songKeys || {});
+      navigate(`/song/${song.id}?playlist=${favoriteSongIds.join(',')}&index=${currentIndex}&from=favorites&keys=${keysJson}`);
+    } catch (error) {
+      console.error('Error navigating to song:', error);
+      // Fallback without keys
+      navigate(`/song/${song.id}?playlist=${favoriteSongIds.join(',')}&index=${currentIndex}&from=favorites`);
+    }
   };
 
   const handleMoveUp = (index) => {
@@ -99,10 +164,7 @@ const PlaylistPage = () => {
       [newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]];
       
       setOrderedFavorites(newOrder);
-      // Update the global favorites with the new order
-      if (setFavorites) {
-        setFavorites(newOrder);
-      }
+      saveOrder(newOrder); // Lưu thứ tự mới
     }
   };
 
@@ -112,41 +174,25 @@ const PlaylistPage = () => {
       [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
       
       setOrderedFavorites(newOrder);
-      // Update the global favorites with the new order
-      if (setFavorites) {
-        setFavorites(newOrder);
-      }
+      saveOrder(newOrder); // Lưu thứ tự mới
     }
   };
 
   const toggleReorderMode = () => {
-    setIsReorderMode(!isReorderMode);
+    const newReorderMode = !isReorderMode;
+    setIsReorderMode(newReorderMode);
     
-    // Debug: Log current state
-    if (!isReorderMode) {
-      console.log('Entering reorder mode');
-      console.log('Current orderedFavorites:', orderedFavorites.map(s => ({id: s.id, title: s.title})));
+    if (!newReorderMode) {
+      // Khi thoát reorder mode, lưu thứ tự hiện tại
+      saveOrder(orderedFavorites);
     }
   };
 
-  // Debug function to check localStorage
-  const checkLocalStorage = () => {
-    const favorites = localStorage.getItem('songFavorites');
-    const order = localStorage.getItem('favoritesOrder');
-    console.log('=== LocalStorage Debug ===');
-    console.log('Favorites:', favorites ? JSON.parse(favorites).length + ' songs' : 'none');
-    console.log('Order:', order ? JSON.parse(order) : 'none');
-    console.log('Current orderedFavorites:', orderedFavorites.length, 'songs');
-  };
-
-  // Call debug on component mount
-  useEffect(() => {
-    checkLocalStorage();
-  }, []);
+  // Debug function to check localStorage (chỉ chạy 1 lần khi mount)
+  // Debug functionality removed for production
 
   const clearAllFavorites = () => {
     if (window.confirm('Bạn có chắc chắn muốn xóa tất cả bài hát?')) {
-      console.log('Clearing all favorites...');
       
       // Clear all songs from favorites
       orderedFavorites.forEach(song => toggleFavorite(song));
@@ -157,42 +203,68 @@ const PlaylistPage = () => {
       // Clear localStorage
       localStorage.removeItem('favoritesOrder');
       localStorage.removeItem('songFavorites');
-      
-      console.log('All favorites cleared');
     }
   };
 
-  const handleSharePlaylist = async () => {
+  const handleSharePlaylist = () => {
     if (orderedFavorites.length === 0) {
       alert('Danh sách Thờ phượng trống! Hãy thêm bài hát trước khi chia sẻ.');
       return;
     }
 
-    const songIds = orderedFavorites.map(song => song.id).join(',');
-    const shareUrl = `${window.location.origin}/playlist?songs=${songIds}`;
-    
     try {
-      if (navigator.share) {
-        await navigator.share({
-          title: 'Danh sách bài hát cho buổi thờ phượng',
-          text: 'Xem Danh sách bài hát cho buổi thờ phượng!',
-          url: shareUrl
+      const songIds = orderedFavorites.map(song => song.id).join(',');
+      
+      // Include song keys in share URL if any custom keys are set
+      let shareUrl = `${window.location.origin}/playlist?songs=${songIds}`;
+      
+      // Only include keys if there are custom keys set
+      const hasCustomKeys = Object.keys(songKeys || {}).some(songId => {
+        const song = orderedFavorites.find(s => s.id.toString() === songId);
+        return song && songKeys[songId] && songKeys[songId] !== song.key_chord;
+      });
+      
+      if (hasCustomKeys) {
+        // Only include keys for songs that have custom keys different from original
+        const relevantKeys = {};
+        Object.keys(songKeys || {}).forEach(songId => {
+          const song = orderedFavorites.find(s => s.id.toString() === songId);
+          if (song && songKeys[songId] && songKeys[songId] !== song.key_chord) {
+            relevantKeys[songId] = songKeys[songId];
+          }
         });
-      } else {
-        await navigator.clipboard.writeText(shareUrl);
-        alert('Link playlist đã được copy vào clipboard!');
+        
+        if (Object.keys(relevantKeys).length > 0) {
+          try {
+            // Tạo URL đẹp hơn - không encode các ký tự cơ bản
+            const keysJson = JSON.stringify(relevantKeys);
+            // Replace encoded characters with raw characters for better readability
+            const prettyKeys = keysJson
+              .replace(/"/g, '"')
+              .replace(/\{/g, '{')
+              .replace(/\}/g, '}')
+              .replace(/,/g, ',')
+              .replace(/:/g, ':');
+            
+            shareUrl += `&keys=${prettyKeys}`;
+          } catch (error) {
+            console.warn('Error encoding keys, sharing without keys:', error);
+          }
+        }
       }
+      
+      // Set the share URL and show the share panel
+      setShareUrl(shareUrl);
+      setCurrentShareUrl(shareUrl);
+      setShowSharePanel(true);
     } catch (error) {
-      console.error('Error sharing:', error);
-      // Fallback manual copy
-      const textArea = document.createElement('textarea');
-      textArea.value = shareUrl;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      alert('Link playlist đã được copy!');
+      console.error('Error preparing share:', error);
+      alert('Không thể chuẩn bị chia sẻ playlist. Vui lòng thử lại.');
     }
+  };
+
+  const handleShareUrlUpdate = (newUrl) => {
+    setCurrentShareUrl(newUrl);
   };
 
   return (
@@ -217,6 +289,11 @@ const PlaylistPage = () => {
                 <div>
                   <h1 className="text-2xl font-bold text-gray-800">
                     Bài hát Chủ nhật
+                    {displayDate && (
+                      <span className="block text-lg text-blue-600 mt-1">
+                        ngày {displayDate}
+                      </span>
+                    )}
                     {isReorderMode && <span className="text-blue-600 ml-2">(Chế độ sắp xếp)</span>}
                   </h1>
                   <p className="text-sm text-gray-600">
@@ -319,14 +396,31 @@ const PlaylistPage = () => {
               </div>
             )}
 
+            {/* Key controls explanation - Only show when not in reorder mode and has songs */}
+            {!isReorderMode && orderedFavorites.length > 0 && (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Music className="h-5 w-5 text-green-600" />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-green-800">Chỉnh hợp âm chủ</h4>
+                    <p className="text-sm text-green-600 mt-1">
+                      Sử dụng thanh điều khiển tone: <strong>--</strong> (giảm 1 cung), <strong>−</strong> (giảm 1/2 cung), 
+                      <strong>+</strong> (tăng 1/2 cung), <strong>++</strong> (tăng 1 cung). 
+                      Tone gốc sẽ có chữ "gốc" hiển thị bên dưới.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Songs display */}
             <div className={isReorderMode ? "space-y-4" : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"}>
               {orderedFavorites.map((song, index) => (
                 <div key={`${song.id}-${index}`} className="relative">
                   {isReorderMode && (
                     <>
-                      {/* Position number */}
-                      <div className="absolute top-2 left-2 z-10 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                      {/* Position number - moved to top right to avoid overlap */}
+                      <div className="absolute -top-2 -left-2 z-10 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold shadow-md border-2 border-white">
                         {index + 1}
                       </div>
                       
@@ -380,11 +474,21 @@ const PlaylistPage = () => {
                     </>
                   )}
                   
+                  {/* Non-reorder mode: Show number badge in corner */}
+                  {!isReorderMode && (
+                    <div className="absolute -top-2 -left-2 z-10 bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs font-bold shadow-lg border-2 border-white">
+                      {index + 1}
+                    </div>
+                  )}
+                  
                   <SongCard
                     song={song}
                     onPlay={handleSongPlay}
                     onToggleFavorite={toggleFavorite}
                     isFavorite={isFavorite(song.id)}
+                    showKeyControls={!isReorderMode}
+                    currentKey={songKeys && song?.id ? songKeys[song.id] : null}
+                    onKeyChange={updateSongKey}
                   />
                 </div>
               ))}
@@ -410,6 +514,14 @@ const PlaylistPage = () => {
 
       {/* Add padding bottom when in reorder mode on mobile to prevent content being hidden */}
       {isReorderMode && <div className="sm:hidden h-20" />}
+
+      {/* Share Panel */}
+      <SharePanel
+        isOpen={showSharePanel}
+        onClose={() => setShowSharePanel(false)}
+        shareUrl={shareUrl}
+        onUpdateShareUrl={handleShareUrlUpdate}
+      />
     </div>
   );
 };

@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Heart, Music, Share2, Plus, Loader2, Edit3 } from 'lucide-react';
+import { ArrowLeft, Check, Music, Share2, Plus, Loader2, Edit3, X, Search } from 'lucide-react';
 import { useAppContext } from '../App';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Input } from '../components/ui/input';
+import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import SongCard from '../components/SongCard';
+import SharePanel from '../components/SharePanel';
 
 const SharedPlaylistPage = () => {
+  // Set page title
+  usePageTitle(createPageTitle('Playlist chia sẻ'));
+  
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { favorites, toggleFavorite, isFavorite } = useAppContext();
@@ -16,9 +22,63 @@ const SharedPlaylistPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editMode, setEditMode] = useState(false);
+  const [songKeys, setSongKeys] = useState({}); // Store keys from URL
+  const [displayDate, setDisplayDate] = useState(''); // Store formatted date for display
+  
+  // Add songs panel state
+  const [showAddPanel, setShowAddPanel] = useState(false);
+  const [allSongs, setAllSongs] = useState([]);
+  const [addPanelSearch, setAddPanelSearch] = useState('');
+  
+  // Share panel state
+  const [showSharePanel, setShowSharePanel] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
+  const [currentShareUrl, setCurrentShareUrl] = useState('');
   
   // Parse song IDs từ URL - thứ tự quan trọng
-  const songIds = searchParams.get('songs')?.split(',').map(Number).filter(Boolean) || [];
+  const songsParam = searchParams.get('songs');
+  const songIds = songsParam ? (() => {
+    try {
+      // Support both encoded and unencoded URLs
+      let decodedSongs = songsParam;
+      if (songsParam.includes('%2C')) {
+        // URL is encoded, decode it
+        decodedSongs = decodeURIComponent(songsParam);
+      }
+      
+      const ids = decodedSongs.split(',').map(Number).filter(Boolean);
+      return ids;
+    } catch (error) {
+      console.error('Error parsing songs parameter:', error);
+      return [];
+    }
+  })() : [];
+  
+  // Parse song keys từ URL with enhanced safety checks
+  const keysParam = searchParams.get('keys');
+  const sharedKeys = keysParam ? (() => {
+    try {
+      let decodedKeys = keysParam;
+      // Support both encoded and unencoded URLs
+      if (keysParam.includes('%7B') || keysParam.includes('%22')) {
+        // URL is encoded, decode it
+        decodedKeys = decodeURIComponent(keysParam);
+      }
+      
+      const parsed = JSON.parse(decodedKeys);
+      
+      // Validate the parsed object
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      } else {
+        console.warn('Invalid keys format - not an object');
+        return {};
+      }
+    } catch (error) {
+      console.warn('Error parsing keys parameter:', error);
+      return {};
+    }
+  })() : {};
 
   useEffect(() => {
     const fetchPlaylistSongs = async () => {
@@ -31,53 +91,288 @@ const SharedPlaylistPage = () => {
       try {
         setLoading(true);
         
-        // Giải pháp: Sử dụng dữ liệu từ localStorage thay vì gọi API (tránh CORS)
+        // Kiểm tra dữ liệu trong localStorage trước
         const cachedSongs = localStorage.getItem('songs_data');
         
         if (cachedSongs) {
-          console.log('Sử dụng dữ liệu từ localStorage...');
-          const allSongs = JSON.parse(cachedSongs);
-          console.log('Cached songs:', allSongs.length, 'songs');
-          console.log('Looking for song IDs:', songIds);
+          try {
+            const allSongs = JSON.parse(cachedSongs);
+            
+            // Validate allSongs is an array
+            if (!Array.isArray(allSongs)) {
+              throw new Error('Cached songs data is not an array');
+            }
+            
+            // Filter và sắp xếp theo thứ tự trong URL
+            const orderedSongs = [];
+            songIds.forEach(id => {
+              const song = allSongs.find(s => s && s.id === id);
+              if (song) {
+                orderedSongs.push(song);
+              }
+            });
+            
+            // Nếu tìm được đủ bài hát từ cache
+            if (orderedSongs.length === songIds.length) {
+              setPlaylistSongs(orderedSongs);
+              setSongKeys(sharedKeys);
+              setError(null);
+              setLoading(false);
+              return;
+            }
+          } catch (parseError) {
+            console.error('Error parsing cached songs:', parseError);
+            localStorage.removeItem('songs_data'); // Remove corrupted data
+          }
+        }
+        
+        // Nếu không có cache hoặc cache không đầy đủ, tải từ API
+        const { API_ENDPOINTS, apiCall } = await import('../utils/apiConfig');
+        
+        try {
+          // Thay vì lấy tất cả bài hát, gọi API cho từng bài cụ thể
           
-          // Filter và sắp xếp theo thứ tự trong URL
-          const orderedSongs = [];
-          songIds.forEach(id => {
-            const song = allSongs.find(s => s.id === id);
-            if (song) {
-              orderedSongs.push(song);
-              console.log(`Found song ${id}:`, song.title);
-            } else {
-              console.log(`Song ${id} not found in cache`);
+          const songPromises = songIds.map(async (songId) => {
+            try {
+              const response = await apiCall(`${API_ENDPOINTS.SONG_VIEW}/${songId}`);
+              
+              if (response.success && response.data) {
+                return response.data;
+              } else {
+                console.warn(`Failed to fetch song ${songId}:`, response);
+                return null;
+              }
+            } catch (error) {
+              console.error(`Error fetching song ${songId}:`, error);
+              return null;
             }
           });
           
-          console.log('Final ordered songs:', orderedSongs);
-          setPlaylistSongs(orderedSongs);
-          setError(orderedSongs.length === 0 ? 'Không tìm thấy bài hát nào trong cache. Hãy về trang chủ để tải dữ liệu.' : null);
-        } else {
-          // Không có dữ liệu cached
-          console.log('Không có dữ liệu trong localStorage');
-          setError('Không có dữ liệu bài hát. Vui lòng về trang chủ để tải dữ liệu trước.');
+          // Đợi tất cả requests hoàn thành
+          const songResults = await Promise.allSettled(songPromises);
+          const validSongs = songResults
+            .map(result => result.status === 'fulfilled' ? result.value : null)
+            .filter(song => song !== null);
+          
+          
+          
+          if (validSongs.length > 0) {
+            // Lưu vào localStorage cho lần sau (cập nhật cache)
+            const existingCache = localStorage.getItem('songs_data');
+            let allCachedSongs = [];
+            
+            if (existingCache) {
+              try {
+                allCachedSongs = JSON.parse(existingCache);
+                if (!Array.isArray(allCachedSongs)) allCachedSongs = [];
+              } catch (e) {
+                allCachedSongs = [];
+              }
+            }
+            
+            // Merge new songs with existing cache
+            validSongs.forEach(newSong => {
+              const existingIndex = allCachedSongs.findIndex(song => song.id === newSong.id);
+              if (existingIndex >= 0) {
+                allCachedSongs[existingIndex] = newSong; // Update existing
+              } else {
+                allCachedSongs.push(newSong); // Add new
+              }
+            });
+            
+            localStorage.setItem('songs_data', JSON.stringify(allCachedSongs));
+            
+            // Sắp xếp theo thứ tự trong URL
+            const orderedSongs = [];
+            songIds.forEach(id => {
+              const song = validSongs.find(s => s && s.id === id);
+              if (song) {
+                orderedSongs.push(song);
+              }
+            });
+            
+            setPlaylistSongs(orderedSongs);
+            setSongKeys(sharedKeys);
+            setError(orderedSongs.length === 0 ? 'Không tìm thấy bài hát nào' : null);
+          } else {
+            setError('Không thể tải được bài hát nào. Vui lòng kiểm tra kết nối mạng.');
+            setPlaylistSongs([]);
+          }
+        } catch (apiError) {
+          console.error('Error loading from API:', apiError);
+          setError('Không thể tải dữ liệu bài hát. Vui lòng kiểm tra kết nối mạng và thử lại.');
           setPlaylistSongs([]);
         }
       } catch (error) {
-        console.error('Error processing playlist:', error);
+        console.error('Error fetching playlist:', error);
         setError('Lỗi khi xử lý playlist');
+        setPlaylistSongs([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchPlaylistSongs();
-  }, [songIds.join(',')]);
+  }, [songIds.join(','), keysParam]); // Use join(',') instead of JSON.stringify for better performance
+
+  // Handle date parameter for display
+  useEffect(() => {
+    const dateParam = searchParams.get('date');
+    
+    if (dateParam) {
+      try {
+        const date = new Date(dateParam);
+        
+        // Validate date
+        if (isNaN(date.getTime())) {
+          throw new Error('Invalid date');
+        }
+        
+        const options = { 
+          weekday: 'short', 
+          year: 'numeric', 
+          month: 'numeric', 
+          day: 'numeric' 
+        };
+        const formattedDate = date.toLocaleDateString('vi-VN', options);
+        setDisplayDate(formattedDate);
+        
+      } catch (error) {
+        console.error('Error parsing date parameter:', error);
+        setDisplayDate('');
+      }
+    } else {
+      setDisplayDate('');
+    }
+  }, [searchParams.get('date')]);
+
+  // Load all songs for add panel
+  useEffect(() => {
+    const loadAllSongs = async () => {
+      try {
+        // Kiểm tra cache trước
+        const cachedSongs = localStorage.getItem('songs_data');
+        if (cachedSongs) {
+          const songs = JSON.parse(cachedSongs);
+          if (Array.isArray(songs)) {
+            setAllSongs(songs);
+            return; // Có cache rồi thì không cần tải từ API
+          }
+        }
+        
+        // Nếu không có cache, tải từ API (chỉ khi cần thiết)
+        if (editMode || showAddPanel) {
+          try {
+            const { API_ENDPOINTS, apiCall } = await import('../utils/apiConfig');
+            const response = await apiCall(API_ENDPOINTS.SONGS);
+            
+            if (response.success && Array.isArray(response.data)) {
+              const songs = response.data;
+              setAllSongs(songs);
+              // Lưu vào cache để sử dụng sau
+              localStorage.setItem('songs_data', JSON.stringify(songs));
+            }
+          } catch (apiError) {
+            console.error('Error loading all songs from API:', apiError);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading all songs:', error);
+      }
+    };
+
+    loadAllSongs();
+  }, [editMode, showAddPanel]); // Chỉ tải khi cần
+
+  // Normalize text function for search
+  const normalizeText = (text) => {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  // Filter available songs (excluding already added songs)
+  const availableSongs = useMemo(() => {
+    const playlistSongIds = new Set(playlistSongs.map(s => s.id));
+    
+    let filtered = allSongs.filter(song => !playlistSongIds.has(song.id));
+
+    // Apply search filter only
+    if (addPanelSearch?.trim()) {
+      const normalizedTerm = normalizeText(addPanelSearch);
+      filtered = filtered.filter(song => {
+        const matchTitle = normalizeText(song.title).includes(normalizedTerm);
+        const matchFirstLyric = normalizeText(song.first_lyric).includes(normalizedTerm);
+        const matchChorus = normalizeText(song.chorus).includes(normalizedTerm);
+        const matchLyrics = normalizeText(song.lyrics).includes(normalizedTerm);
+        
+        return matchTitle || matchFirstLyric || matchChorus || matchLyrics;
+      });
+    }
+
+    return filtered;
+  }, [allSongs, playlistSongs, addPanelSearch]);
+
+  // Add song to playlist handler
+  const handleAddSong = (song) => {
+    if (!song || playlistSongs.find(s => s.id === song.id)) {
+      return; // Song already exists or invalid
+    }
+    
+    setPlaylistSongs(prev => [...prev, song]);
+  };
+
+  // Remove song from playlist handler
+  const handleRemoveSong = (songId) => {
+    setPlaylistSongs(prev => prev.filter(song => song.id !== songId));
+    // Also remove from songKeys if exists
+    setSongKeys(prev => {
+      const updated = { ...prev };
+      delete updated[songId.toString()];
+      return updated;
+    });
+  };
+
+  // Toggle add panel
+  const handleToggleAddPanel = () => {
+    setShowAddPanel(!showAddPanel);
+  };
+
+  // Clear add panel search and filters
+  const handleClearAddPanelSearch = () => {
+    setAddPanelSearch('');
+  };
 
   const handleSongPlay = (song) => {
+    if (!song || !song.id) {
+      console.warn('Invalid song data');
+      return;
+    }
+
     // Truyền playlist context khi navigate sang SongDetailPage
     const playlistSongIds = playlistSongs.map(s => s.id);
     const currentIndex = playlistSongs.findIndex(s => s.id === song.id);
     
-    navigate(`/song/${song.id}?playlist=${playlistSongIds.join(',')}&index=${currentIndex}&from=shared`);
+    if (currentIndex === -1) {
+      console.warn('Song not found in playlist');
+      return;
+    }
+
+    try {
+      // Include song keys in the navigation params with safety check
+      const keysToShare = songKeys || {};
+      const keysJson = JSON.stringify(keysToShare);
+      navigate(`/song/${song.id}?playlist=${playlistSongIds.join(',')}&index=${currentIndex}&from=shared&keys=${keysJson}`);
+    } catch (error) {
+      console.error('Error navigating to song:', error);
+      // Fallback without keys
+      navigate(`/song/${song.id}?playlist=${playlistSongIds.join(',')}&index=${currentIndex}&from=shared`);
+    }
   };
 
   const handleAddAllToFavorites = () => {
@@ -96,30 +391,17 @@ const SharedPlaylistPage = () => {
     }
   };
 
-  const handleSharePlaylist = async () => {
+  const handleSharePlaylist = () => {
     const currentUrl = window.location.href;
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: 'Playlist bài hát',
-          text: 'Xem playlist bài hát hay này!',
-          url: currentUrl
-        });
-      } else {
-        await navigator.clipboard.writeText(currentUrl);
-        alert('Link playlist đã được copy vào clipboard!');
-      }
-    } catch (error) {
-      console.error('Error sharing:', error);
-      // Fallback manual copy
-      const textArea = document.createElement('textarea');
-      textArea.value = currentUrl;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      alert('Link playlist đã được copy!');
-    }
+    
+    // Set the share URL and show the share panel
+    setShareUrl(currentUrl);
+    setCurrentShareUrl(currentUrl);
+    setShowSharePanel(true);
+  };
+
+  const handleShareUrlUpdate = (newUrl) => {
+    setCurrentShareUrl(newUrl);
   };
 
   const handleEditPlaylist = () => {
@@ -129,11 +411,42 @@ const SharedPlaylistPage = () => {
   const handleSaveEdit = () => {
     // Tạo URL mới với thứ tự hiện tại
     const newSongIds = playlistSongs.map(song => song.id).join(',');
-    const newUrl = `/playlist?songs=${newSongIds}`;
+    let newUrl = `/playlist?songs=${newSongIds}`;
+    
+    // Include keys if any are set and different from original
+    const hasCustomKeys = Object.keys(songKeys).some(songId => {
+      const song = playlistSongs.find(s => s.id.toString() === songId);
+      return song && songKeys[songId] && songKeys[songId] !== song.key_chord;
+    });
+    
+    if (hasCustomKeys) {
+      const relevantKeys = {};
+      Object.keys(songKeys).forEach(songId => {
+        const song = playlistSongs.find(s => s.id.toString() === songId);
+        if (song && songKeys[songId] && songKeys[songId] !== song.key_chord) {
+          relevantKeys[songId] = songKeys[songId];
+        }
+      });
+      
+      if (Object.keys(relevantKeys).length > 0) {
+        // Tạo URL đẹp hơn - không encode các ký tự cơ bản
+        const keysJson = JSON.stringify(relevantKeys);
+        // Replace encoded characters with raw characters for better readability
+        const prettyKeys = keysJson
+          .replace(/"/g, '"')
+          .replace(/\{/g, '{')
+          .replace(/\}/g, '}')
+          .replace(/,/g, ',')
+          .replace(/:/g, ':');
+        
+        newUrl += `&keys=${prettyKeys}`;
+      }
+    }
     
     // Update URL
     window.history.replaceState({}, '', newUrl);
     setEditMode(false);
+    setShowAddPanel(false); // Close add panel when saving
     alert('Playlist đã được cập nhật! URL mới đã sẵn sàng để chia sẻ.');
   };
 
@@ -155,8 +468,30 @@ const SharedPlaylistPage = () => {
   };
 
   const removeSong = (index) => {
-    const newSongs = playlistSongs.filter((_, i) => i !== index);
-    setPlaylistSongs(newSongs);
+    const songToRemove = playlistSongs[index];
+    if (songToRemove) {
+      handleRemoveSong(songToRemove.id);
+    }
+  };
+
+  // Function to update song key in shared playlist
+  const updateSongKey = (songId, newKey) => {
+    if (!songId || !newKey || typeof newKey !== 'string') {
+      console.warn('Invalid songId or newKey for updateSongKey');
+      return;
+    }
+    
+    try {
+      setSongKeys(prev => {
+        const updated = {
+          ...prev,
+          [songId]: newKey
+        };
+        return updated;
+      });
+    } catch (error) {
+      console.error('Error updating song key:', error);
+    }
   };
 
   if (loading) {
@@ -164,7 +499,8 @@ const SharedPlaylistPage = () => {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-500" />
-          <p className="text-gray-600">Đang tải playlist...</p>
+          <p className="text-gray-600 mb-2">Đang tải danh sách bài hát...</p>
+          <p className="text-sm text-gray-500">Lần đầu mở có thể hơi lâu do cần tải dữ liệu từ server</p>
         </div>
       </div>
     );
@@ -200,13 +536,17 @@ const SharedPlaylistPage = () => {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500 rounded-xl">
-                  <Music className="h-6 w-6 text-white" />
-                </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-800">Playlist được chia sẻ</h1>
+                  <h1 className="text-xl font-bold text-gray-800">
+                    Danh sách bài hát thờ phượng
+                  </h1>
                   <p className="text-sm text-gray-600">
-                    {playlistSongs.length} bài hát {editMode && '• Đang chỉnh sửa'}
+                    {displayDate && (
+                      <span className="text-blue-600">
+                        {displayDate + ' • '}  
+                      </span>
+                    )}
+                     {playlistSongs.length} bài hát {editMode && '• Đang chỉnh sửa'}
                   </p>
                 </div>
               </div>
@@ -216,13 +556,22 @@ const SharedPlaylistPage = () => {
               {editMode ? (
                 <>
                   <Button
+                    onClick={handleToggleAddPanel}
+                    className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                  <Button
                     onClick={handleSaveEdit}
                     className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white"
                   >
-                    Lưu
+                    <Check className="h-4 w-4" />
                   </Button>
                   <Button
-                    onClick={() => setEditMode(false)}
+                    onClick={() => {
+                      setEditMode(false);
+                      setShowAddPanel(false);
+                    }}
                     variant="outline"
                     className="flex items-center gap-2"
                   >
@@ -263,6 +612,23 @@ const SharedPlaylistPage = () => {
 
       {/* Main content */}
       <main className="container mx-auto px-4 py-6">
+        {/* Key controls explanation - Only show when not in edit mode and has songs */}
+        {!editMode && playlistSongs.length > 0 && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center gap-3">
+              <Music className="h-5 w-5 text-green-600" />
+              <div className="flex-1">
+                <h4 className="font-medium text-green-800">Chỉnh hợp âm chủ</h4>
+                <p className="text-sm text-green-600 mt-1">
+                  Sử dụng thanh điều khiển tone: <strong>--</strong> (giảm 1 cung), <strong>−</strong> (giảm 1/2 cung), 
+                  <strong>+</strong> (tăng 1/2 cung), <strong>++</strong> (tăng 1 cung). 
+                  Tone gốc sẽ có chữ "gốc" hiển thị bên dưới.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Songs grid - hiển thị theo thứ tự từ URL */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {playlistSongs.map((song, index) => (
@@ -297,19 +663,21 @@ const SharedPlaylistPage = () => {
                   </Button>
                 </div>
               )}
-              <div className="relative">
-                {!editMode && (
-                  <div className="absolute top-2 left-2 z-10 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
-                    {index + 1}
-                  </div>
-                )}
-                <SongCard
-                  song={song}
-                  onPlay={handleSongPlay}
-                  onToggleFavorite={toggleFavorite}
-                  isFavorite={isFavorite(song.id)}
-                />
+              
+              {/* Position number - always show, positioned to avoid title overlap */}
+              <div className="absolute -top-2 -left-2 z-10 bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs font-bold shadow-lg border-2 border-white">
+                {index + 1}
               </div>
+              
+              <SongCard
+                song={song}
+                onPlay={handleSongPlay}
+                onToggleFavorite={toggleFavorite}
+                isFavorite={isFavorite(song?.id)}
+                showKeyControls={!editMode}
+                currentKey={songKeys && song?.id ? songKeys[song.id] || song.key_chord : song.key_chord}
+                onKeyChange={updateSongKey}
+              />
             </div>
           ))}
         </div>
@@ -329,6 +697,131 @@ const SharedPlaylistPage = () => {
           </div>
         )}
       </main>
+
+      {/* Add Songs Panel */}
+      {showAddPanel && editMode && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Panel Header */}
+            <div className="border-b border-gray-200 p-4 flex items-center justify-between flex-shrink-0">
+              <h3 className="text-xl font-bold text-gray-800">Thêm bài hát vào playlist</h3>
+              <Button
+                onClick={handleToggleAddPanel}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Search Section */}
+            <div className="border-b border-gray-200 p-4 flex-shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  type="text"
+                  placeholder="Tìm kiếm bài hát..."
+                  value={addPanelSearch}
+                  onChange={(e) => setAddPanelSearch(e.target.value)}
+                  className="pl-10 pr-10"
+                />
+                {addPanelSearch && (
+                  <Button
+                    onClick={handleClearAddPanelSearch}
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Available Songs List */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="mb-4">
+                <p className="text-sm text-gray-600">
+                  Tìm thấy {availableSongs.length} bài hát có thể thêm
+                </p>
+              </div>
+
+              {availableSongs.length === 0 ? (
+                <div className="text-center py-8">
+                  <Music className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">
+                    {addPanelSearch
+                      ? 'Không tìm thấy bài hát phù hợp'
+                      : 'Tất cả bài hát đã có trong playlist'
+                    }
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  {availableSongs.map((song) => (
+                    <Card key={song.id} className="hover:shadow-md transition-shadow overflow-hidden">
+                      <CardContent className="p-3">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-gray-800 truncate text-sm">
+                              {song.title}
+                            </h4>
+                            <div className="flex items-center gap-1 mt-1 flex-wrap">
+                              {song.type_name && (
+                                <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+                                  {song.type_name}
+                                </Badge>
+                              )}
+                              {song.key_chord && (
+                                <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                                  {song.key_chord}
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            {/* Song Content */}
+                            <div className="space-y-1 text-xs text-gray-600 mt-2">
+                              {song.first_lyric && (
+                                <p className="line-clamp-1">
+                                  <span className="font-medium">Lời đầu:</span> {song.first_lyric}
+                                </p>
+                              )}
+                              {song.chorus && (
+                                <p className="line-clamp-1">
+                                  <span className="font-medium">Điệp khúc:</span> {song.chorus}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <Button
+                            onClick={() => handleAddSong(song)}
+                            size="sm"
+                            className="shrink-0 w-8 h-8 p-0 bg-green-500 hover:bg-green-600 text-white rounded-full"
+                            title="Thêm bài hát vào playlist"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Panel */}
+      <SharePanel
+        isOpen={showSharePanel}
+        onClose={() => setShowSharePanel(false)}
+        shareUrl={shareUrl}
+        title="Chia sẻ Playlist"
+        onUpdateShareUrl={handleShareUrlUpdate}
+      />
     </div>
   );
 };

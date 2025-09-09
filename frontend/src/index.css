@@ -16,20 +16,45 @@ code {
         monospace;
 }
 
-/* Smooth transitions for reordering */
-.reorder-transition {
-    transition: all 0.3s ease;
+/* PWA Styles */
+@media (display-mode: standalone) {
+  body {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Only disable selection on buttons and interactive elements, not all text */
+  button, .btn, [role="button"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  /* Allow text selection on text content areas with better touch behavior */
+  .song-title, .chord-text, .lyrics, p, span, div[class*="text"], 
+  input, textarea, pre, code {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+    touch-action: manipulation;
+  }
+  
+  /* Specifically enable selection for lyrics and chords */
+  .lyrics-line, .chord-line, .lyric-content {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    -webkit-touch-callout: default;
+  }
+  
+  /* Add padding for iPhone notch */
+  .App {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
 }
 
-/* Button hover effects */
-.move-button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.15);
-}
 
-.move-button:active {
-    transform: translateY(0);
-}
+
 
 
 
@@ -98,4 +123,14 @@ code {
   body {
     @apply bg-background text-foreground;
     }
+}
+
+/* Custom utilities for HomePageSongCard */
+@layer utilities {
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
 }

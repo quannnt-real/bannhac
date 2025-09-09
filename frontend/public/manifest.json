@@ -1,0 +1,67 @@
+{
+  "name": "My Heart Belong to Jesus - Bài Hát Thờ Phượng",
+  "short_name": "My Heart",
+  "description": "Ứng dụng bài hát thờ phượng với hợp âm - My Heart Belong to Jesus",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#dc2626",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/logo192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/logo512.png", 
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/Logo_app.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["music", "lifestyle", "entertainment", "religion"],
+  "lang": "vi-VN",
+  "dir": "ltr",
+  "shortcuts": [
+    {
+      "name": "Trang chủ",
+      "short_name": "Home", 
+      "description": "Về trang chủ",
+      "url": "/",
+      "icons": [{ "src": "/logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Yêu thích",
+      "short_name": "Favorites",
+      "description": "Bài hát yêu thích",
+      "url": "/playlist",
+      "icons": [{ "src": "/logo192.png", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "protocol_handlers": [
+    {
+      "protocol": "web+myheart",
+      "url": "/playlist?songs=%s"
+    }
+  ],
+  "capture_links": "existing-client-navigate",
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "id": "/",
+  "handle_links": "preferred",
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
+}

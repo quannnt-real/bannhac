@@ -1,38 +1,68 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Music, Heart, Filter, ChevronUp, Wifi, WifiOff } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Music, Heart, Filter, ChevronUp, Wifi, WifiOff, Import } from 'lucide-react';
 import { useAppContext } from '../App';
 import SearchBar from '../components/SearchBar';
-import SongCard from '../components/SongCard';
+import HomePageSongCard from '../components/HomePageSongCard';
 import FilterPanel from '../components/FilterPanel';
+import ImportPanel from '../components/ImportPanel';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 // Import optimized hooks
-import { useOptimizedSearch } from '../hooks/useOptimizedSearch';
+import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
+import { API_ENDPOINTS, buildApiUrl, apiCall } from '../utils/apiConfig';
 
 const HomePage = () => {
+  // Set page title
+  usePageTitle(createPageTitle('Danh sách bài hát'));
+  
   const navigate = useNavigate();
+  const location = useLocation();
   const { songs, setSongs, favorites, toggleFavorite, isFavorite, types, setTypes, topics, setTopics, isOffline, setIsOffline } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
+  const searchTermRef = useRef(searchTerm); // Ref to avoid dependency issues
+  const searchBarRef = useRef(null); // Ref for SearchBar component
+  
+  // Update ref when searchTerm changes
+  useEffect(() => {
+    searchTermRef.current = searchTerm;
+  }, [searchTerm]);
+
+  // Global keyboard shortcut handler
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      // Check for Ctrl+F (Windows) or Cmd+F (Mac)
+      if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
+        event.preventDefault(); // Prevent browser's default find
+        searchBarRef.current?.focus(); // Focus and select search input
+      }
+      
+      // ESC to clear search
+      if (event.key === 'Escape' && searchTerm) {
+        searchBarRef.current?.clear();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [searchTerm]);
+
   const [showFilter, setShowFilter] = useState(false);
+  const [showImportPanel, setShowImportPanel] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [sortConfig, setSortConfig] = useState({
     sorts: [] // Array of sort objects: [{ field: 'chord', order: 'asc' }, { field: 'title', order: 'desc' }, ...]
   });
   const [filters, setFilters] = useState({
     type_ids: [],
-    topic_ids: []
-  });
-  const [pagination, setPagination] = useState({
-    current_page: 1,
-    per_page: 20,
-    total_items: 0,
-    total_pages: 1,
-    has_next: false,
-    has_prev: false
+    topic_ids: [],
+    key_chords: []
   });
   const [allSongs, setAllSongs] = useState([]);
+  
+  // Cache for search results to improve performance
+  const searchCache = useRef(new Map());
+  const lastSearchTerm = useRef('');
 
   // Function to handle sort button clicks
   const handleSort = (field) => {
@@ -79,41 +109,32 @@ const HomePage = () => {
     };
   };
 
-  // Optimized fetch function with caching
+  // Optimized fetch function - chỉ lấy data một lần, không depend on search
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Build API URL with search and sort parameters
-      const params = new URLSearchParams({
-        all: 'true' // Lấy tất cả bài hát
-      });
+      // Build API URL - lấy tất cả bài hát
+      const params = {
+        all: 'true' // Lấy tất cả bài hát, filter sẽ được thực hiện ở client-side
+      };
 
-      if (searchTerm?.trim()) {
-        params.append('search', searchTerm);
-      }
+      const apiUrl = buildApiUrl(API_ENDPOINTS.SONGS, params);
 
-      const apiUrl = `/api/songs?${params}`;
-      console.log('📡 Fetching from proxy:', apiUrl);
-
-      // Gọi API qua proxy thay vì trực tiếp
-      const songsRes = await fetch(apiUrl, {
+      // Gọi API với config mới
+      const data = await apiCall(apiUrl, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         mode: 'cors'
       });
-      const songsData = await songsRes.json();
 
-      if (songsData.success) {
-        setSongs(songsData.data);
-        setAllSongs(songsData.data);
+      if (data.success) {
+        setSongs(data.data);
+        setAllSongs(data.data);
         
         // Tạo types và topics từ songs data - optimized with Map
         const typesMap = new Map();
         const topicsMap = new Map();
         
-        songsData.data.forEach(song => {
+        data.data.forEach(song => {
           // Collect unique types
           if (song.type_id && song.type_name) {
             typesMap.set(song.type_id, {
@@ -138,26 +159,18 @@ const HomePage = () => {
         setTypes(uniqueTypes);
         setTopics(uniqueTopics);
         
-        // Không cần pagination khi lấy all=true
-        setPagination({
-          current_page: 1,
-          per_page: songsData.data.length,
-          total_items: songsData.data.length,
-          total_pages: 1,
-          has_next: false,
-          has_prev: false
-        });
-        
         // Save to localStorage for offline access
-        localStorage.setItem('songs_data', JSON.stringify(songsData.data));
+        localStorage.setItem('songs_data', JSON.stringify(data.data));
         localStorage.setItem('types_data', JSON.stringify(uniqueTypes));
         localStorage.setItem('topics_data', JSON.stringify(uniqueTopics));
       }
 
       setIsOffline(false);
     } catch (error) {
-      console.error('Error fetching data:', error);
-      setIsOffline(true);
+      console.error('Fetch error:', error);
+      if (error.message.includes('fetch') || error.name === 'TypeError') {
+          setIsOffline(true);
+      }
       
       // Load from localStorage if offline
       const savedSongs = localStorage.getItem('songs_data');
@@ -174,20 +187,99 @@ const HomePage = () => {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, setSongs, setTypes, setTopics, setIsOffline]);
+  }, [setSongs, setTypes, setTopics, setIsOffline]); // Removed searchTerm from deps
 
-  // Debounced effect for API calls
+  // Initial data fetch - chỉ gọi một lần khi component mount
   useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      fetchData();
-    }, searchTerm ? 500 : 0); // Debounce search
+    fetchData();
+  }, []); // Empty dependency array - chỉ chạy một lần
 
-    return () => clearTimeout(debounceTimer);
-  }, [fetchData, searchTerm]);
+  // Utility function để normalize text cho tìm kiếm thông minh
+  const normalizeText = (text) => {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .normalize('NFD') // Decompose accented characters
+      .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+      .replace(/[^\w\s]/g, ' ') // Replace punctuation with spaces
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+  };
 
-  // Client-side filtering và sorting với useMemo cho performance
+  // Enhanced search function that handles punctuation intelligently - with caching
+  // Enhanced search function that handles punctuation intelligently - simplified and fixed
+  const isTextMatch = useCallback((text, searchTerm) => {
+    if (!text || !searchTerm) return false;
+    
+    const cacheKey = `${text}__${searchTerm}`;
+    if (searchCache.current.has(cacheKey)) {
+      return searchCache.current.get(cacheKey);
+    }
+    
+    // Simple and effective approach - remove ALL punctuation completely
+    const cleanText = text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+      .replace(/[^\w\s]/g, '') // Remove ALL punctuation completely (no space replacement)
+      .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
+      .trim();
+    
+    const cleanTerm = searchTerm
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+      .replace(/[^\w\s]/g, '') // Remove ALL punctuation completely (no space replacement)
+      .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
+      .trim();
+    
+    // Simple substring matching after cleaning
+    const result = cleanText.includes(cleanTerm);
+    
+    // Debug logging for specific search term (comment out in production)
+    // if (searchTerm.toLowerCase().includes('vinh danh')) {
+    //   console.log('Debug search:', {
+    //     originalText: text.substring(0, 100) + '...',
+    //     cleanText: cleanText.substring(0, 100) + '...',
+    //     searchTerm: searchTerm,
+    //     cleanTerm: cleanTerm,
+    //     result: result
+    //   });
+    // }
+    
+    // Cache the result (limit cache size to prevent memory issues)
+    if (searchCache.current.size > 1000) {
+      searchCache.current.clear();
+    }
+    searchCache.current.set(cacheKey, result);
+    
+    return result;
+  }, []);
+
+  // Client-side filtering và sorting với useMemo cho performance - improved with early termination
   const filteredSongs = useMemo(() => {
+    // Clear search cache when search term changes significantly
+    if (Math.abs(searchTerm.length - lastSearchTerm.current.length) > 3) {
+      searchCache.current.clear();
+    }
+    lastSearchTerm.current = searchTerm;
+
     let filtered = allSongs.filter(song => {
+      // Filter by search term - Early termination for better performance
+      if (searchTerm?.trim()) {
+        // Check title first (most likely to match)
+        if (isTextMatch(song.title, searchTerm)) return true;
+        // Then check first lyric
+        if (isTextMatch(song.first_lyric, searchTerm)) return true;
+        // Then chorus
+        if (isTextMatch(song.chorus, searchTerm)) return true;
+        // Finally full lyrics (most expensive)
+        if (isTextMatch(song.lyrics, searchTerm)) return true;
+        
+        // If none match, exclude this song
+        return false;
+      }
+      
       // Filter by type
       if (filters.type_ids.length > 0 && !filters.type_ids.includes(song.type_id)) {
         return false;
@@ -195,6 +287,11 @@ const HomePage = () => {
       
       // Filter by topic  
       if (filters.topic_ids.length > 0 && !filters.topic_ids.includes(song.topic_id)) {
+        return false;
+      }
+      
+      // Filter by key chord
+      if (filters.key_chords && filters.key_chords.length > 0 && !filters.key_chords.includes(song.key_chord)) {
         return false;
       }
       
@@ -236,30 +333,102 @@ const HomePage = () => {
     }
 
     return filtered;
-  }, [allSongs, filters, sortConfig]);
+  }, [allSongs, filters, sortConfig, searchTerm, isTextMatch]); // Added isTextMatch to deps
 
-  // Search suggestions based on current data - optimized
-  const searchSuggestions = useMemo(() => {
-    if (!searchTerm.trim()) return [];
-    
-    const term = searchTerm.toLowerCase();
-    const suggestions = new Set();
-    
-    // Limit search to first 100 songs for performance
-    filteredSongs.slice(0, 100).forEach(song => {
-      if (song.title.toLowerCase().includes(term)) {
-        suggestions.add(song.title);
-      }
-      if (song.first_lyric && song.first_lyric.toLowerCase().includes(term)) {
-        const words = song.first_lyric.split(' ').filter(word => 
-          word.toLowerCase().includes(term) && word.length > 2
-        );
-        words.forEach(word => suggestions.add(word));
+  // Extract unique chords from songs data
+  const availableChords = useMemo(() => {
+    const chordsSet = new Set();
+    allSongs.forEach(song => {
+      if (song.key_chord && song.key_chord.trim()) {
+        chordsSet.add(song.key_chord.trim());
       }
     });
     
-    return Array.from(suggestions).slice(0, 5);
-  }, [searchTerm, filteredSongs]);
+    // Convert to array and sort - prioritize common keys first
+    const commonKeys = ['C', 'D', 'E', 'F', 'G', 'A', 'B', 'Dm', 'Em', 'Am', 'Bm', 'Cm', 'Fm', 'Gm'];
+    const chords = Array.from(chordsSet);
+    
+    return chords.sort((a, b) => {
+      const aIndex = commonKeys.indexOf(a);
+      const bIndex = commonKeys.indexOf(b);
+      
+      // If both are common keys, sort by common key order
+      if (aIndex !== -1 && bIndex !== -1) {
+        return aIndex - bIndex;
+      }
+      // If only a is common, a comes first
+      if (aIndex !== -1 && bIndex === -1) {
+        return -1;
+      }
+      // If only b is common, b comes first
+      if (aIndex === -1 && bIndex !== -1) {
+        return 1;
+      }
+      // If neither is common, sort alphabetically
+      return a.localeCompare(b);
+    });
+  }, [allSongs]);
+
+  // Search suggestions based on current data - optimized with smart matching and limited processing
+  const searchSuggestions = useMemo(() => {
+    if (!searchTerm.trim()) return [];
+    
+    const suggestions = new Set();
+    const maxSongsToProcess = 50; // Limit for better performance
+    
+    // Process only a subset of songs for suggestions
+    const songsToProcess = allSongs.slice(0, maxSongsToProcess);
+    
+    songsToProcess.forEach(song => {
+      // Early exit if we have enough suggestions
+      if (suggestions.size >= 8) return;
+      
+      // Check title matches
+      if (isTextMatch(song.title, searchTerm)) {
+        suggestions.add(song.title);
+        return; // Don't check other fields if title matches
+      }
+      
+      // Check first lyric matches and extract phrases
+      if (song.first_lyric && isTextMatch(song.first_lyric, searchTerm)) {
+        // Extract phrases that contain the search term
+        const sentences = song.first_lyric.split(/[.!?]+/).filter(s => s.trim().length > 0);
+        sentences.forEach(sentence => {
+          if (suggestions.size >= 8) return;
+          if (isTextMatch(sentence.trim(), searchTerm) && sentence.trim().length <= 50) {
+            suggestions.add(sentence.trim());
+          }
+        });
+        
+        // Also add individual meaningful words
+        const words = song.first_lyric.split(/[\s,.-]+/).filter(word => 
+          word.length > 2 && isTextMatch(word, searchTerm)
+        );
+        words.forEach(word => {
+          if (suggestions.size >= 8) return;
+          if (word.length <= 20) { // Avoid very long words
+            suggestions.add(word);
+          }
+        });
+      }
+      
+      // Check chorus matches (only if we still need more suggestions)
+      if (suggestions.size < 8 && song.chorus && isTextMatch(song.chorus, searchTerm)) {
+        const sentences = song.chorus.split(/[.!?]+/).filter(s => s.trim().length > 0);
+        sentences.forEach(sentence => {
+          if (suggestions.size >= 8) return;
+          if (isTextMatch(sentence.trim(), searchTerm) && sentence.trim().length <= 50) {
+            suggestions.add(sentence.trim());
+          }
+        });
+      }
+    });
+    
+    // Convert to array, prioritize shorter suggestions, and limit to 8
+    return Array.from(suggestions)
+      .sort((a, b) => a.length - b.length)
+      .slice(0, 8);
+  }, [searchTerm, allSongs, isTextMatch]); // Added isTextMatch to deps
 
   // Optimized handlers with useCallback
   const handleSongPlay = useCallback((song) => {
@@ -287,7 +456,7 @@ const HomePage = () => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <img 
-                src="https://htnguonsong.com/dist/img/brand/Logo_app.png" 
+                src="/Logo_app.png" 
                 alt="Hợp Âm Thánh Ca"
                 className="h-12 object-contain"
               />
@@ -302,6 +471,16 @@ const HomePage = () => {
               </div>
               
               <Button
+                onClick={() => setShowImportPanel(true)}
+                variant="outline"
+                className="flex items-center gap-2 border-green-200 text-green-600 hover:bg-green-50"
+                title="Nhập mã PWA để mở playlist"
+              >
+                <Import className="h-4 w-4" />
+                <span className="hidden sm:inline">Nhập mã</span>
+              </Button>
+              
+              <Button
                 onClick={() => navigate('/favorites')}
                 variant="outline"
                 className="flex items-center gap-2 border-blue-200 text-blue-600 hover:bg-blue-50"
@@ -313,6 +492,7 @@ const HomePage = () => {
           </div>
           
           <SearchBar
+            ref={searchBarRef}
             onSearch={handleSearch}
             suggestions={searchSuggestions}
             onSuggestionClick={handleSearchSuggestion}
@@ -369,6 +549,11 @@ const HomePage = () => {
               </>
             )}
           </p>
+          {!searchTerm && (
+            <p className="hidden md:block text-gray-400 text-sm mt-1">
+              💡 Mẹo: Nhấn <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">Ctrl</kbd> + <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">F</kbd> (hoặc <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">⌘</kbd> + <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">F</kbd>) để tìm kiếm nhanh
+            </p>
+          )}
         </div>
 
         {/* Songs grid - Optimized rendering */}
@@ -396,7 +581,7 @@ const HomePage = () => {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredSongs.map((song, index) => (
-                <SongCard
+                <HomePageSongCard
                   key={song.id} // Use song.id as key instead of compound key for better performance
                   song={song}
                   onPlay={handleSongPlay}
@@ -434,6 +619,7 @@ const HomePage = () => {
         onSortChange={setSortConfig}
         types={types}
         topics={topics}
+        chords={availableChords}
         filters={filters}
         onFilterChange={setFilters}
       />
@@ -447,6 +633,12 @@ const HomePage = () => {
           {showFilter ? <ChevronUp className="h-6 w-6" /> : <Filter className="h-6 w-6" />}
         </Button>
       </div>
+
+      {/* Import Panel */}
+      <ImportPanel
+        isOpen={showImportPanel}
+        onClose={() => setShowImportPanel(false)}
+      />
     </div>
   );
 };

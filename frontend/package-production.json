@@ -1,0 +1,20 @@
+{
+  "name": "bannhac-production",
+  "version": "1.0.0",
+  "description": "Bannhac frontend production server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": ["react", "music", "bannhac"],
+  "author": "Your Name",
+  "license": "MIT"
+}

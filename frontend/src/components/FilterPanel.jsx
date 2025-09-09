@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
-const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, filters, onFilterChange }) => {
+const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, chords = [], filters, onFilterChange, showSort = true }) => {
   const sortFields = [
     { value: 'key_chord', label: 'Hợp âm' },
     { value: 'type_name', label: 'Thể loại' },
@@ -124,11 +124,34 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, f
                 </div>
               </div>
 
+              {/* Chord Filter */}
+              <div className="mb-4">
+                <label className="text-sm font-medium text-gray-600 mb-2 block">Hợp âm</label>
+                <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+                  {chords.map((chord) => (
+                    <label key={chord} className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.key_chords?.includes(chord) || false}
+                        onChange={(e) => {
+                          const newKeyChords = e.target.checked
+                            ? [...(filters.key_chords || []), chord]
+                            : (filters.key_chords || []).filter(c => c !== chord);
+                          onFilterChange({ ...filters, key_chords: newKeyChords });
+                        }}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 font-mono">{chord}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               {/* Clear filters */}
-              {(filters.type_ids.length > 0 || filters.topic_ids.length > 0) && (
+              {(filters.type_ids.length > 0 || filters.topic_ids.length > 0 || (filters.key_chords && filters.key_chords.length > 0)) && (
                 <div className="flex justify-end">
                   <Button
-                    onClick={() => onFilterChange({ type_ids: [], topic_ids: [] })}
+                    onClick={() => onFilterChange({ type_ids: [], topic_ids: [], key_chords: [] })}
                     variant="outline"
                     size="sm"
                     className="text-red-600 border-red-300 hover:bg-red-50"
@@ -139,80 +162,85 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, f
               )}
             </div>
 
-            {/* Quick sort buttons */}
-            <div>
-              <h3 className="font-semibold text-gray-700 mb-3">Sắp xếp nhanh</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {quickSortButtons.map(({ field, label }) => {
-                  const sortStatus = getSortStatus(field);
-                  const isActive = sortStatus !== null;
-                  
-                  return (
-                    <button
-                      key={field}
-                      onClick={() => handleQuickSort(field)}
-                      className={`
-                        px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative text-left
-                        ${isActive 
-                          ? 'bg-blue-100 text-blue-800 border-2 border-blue-200' 
-                          : 'bg-gray-50 text-gray-600 border border-gray-300 hover:bg-gray-100'
-                        }
-                      `}
-                    >
-                      {label}
-                      {isActive && (
-                        <>
-                          <span className="ml-2">
-                            {sortStatus.order === 'asc' ? '↑ A-Z' : '↓ Z-A'}
-                          </span>
-                          {sortStatus.priority > 1 && (
-                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                              {sortStatus.priority}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Active sorts display */}
-            {sortConfig.sorts.length > 0 && (
-              <div>
-                <h3 className="font-semibold text-gray-700 mb-3">Sắp xếp hiện tại</h3>
-                <div className="space-y-2">
-                  {sortConfig.sorts.map((sort, index) => {
-                    const fieldLabels = {
-                      key_chord: 'Hợp âm',
-                      title: 'Tên bài hát', 
-                      type_name: 'Thể loại',
-                      topic_name: 'Chủ đề'
-                    };
-                    return (
-                      <div key={sort.field} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
-                        <div>
-                          <span className="font-medium text-gray-700">
-                            {index + 1}. {fieldLabels[sort.field]}
-                          </span>
-                          <span className="ml-2 text-sm text-gray-500">
-                            ({sort.order === 'asc' ? 'A → Z' : 'Z → A'})
-                          </span>
-                        </div>
-                        <Button
-                          onClick={() => removeSort(sort.field)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+            {/* Sort Section - only show if showSort is true */}
+            {showSort && (
+              <>
+                {/* Quick sort buttons */}
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-3">Sắp xếp nhanh</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {quickSortButtons.map(({ field, label }) => {
+                      const sortStatus = getSortStatus(field);
+                      const isActive = sortStatus !== null;
+                      
+                      return (
+                        <button
+                          key={field}
+                          onClick={() => handleQuickSort(field)}
+                          className={`
+                            px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative text-left
+                            ${isActive 
+                              ? 'bg-blue-100 text-blue-800 border-2 border-blue-200' 
+                              : 'bg-gray-50 text-gray-600 border border-gray-300 hover:bg-gray-100'
+                            }
+                          `}
                         >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    );
-                  })}
+                          {label}
+                          {isActive && (
+                            <>
+                              <span className="ml-2">
+                                {sortStatus.order === 'asc' ? '↑ A-Z' : '↓ Z-A'}
+                              </span>
+                              {sortStatus.priority > 1 && (
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                                  {sortStatus.priority}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+
+                {/* Active sorts display */}
+                {sortConfig.sorts.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold text-gray-700 mb-3">Sắp xếp hiện tại</h3>
+                    <div className="space-y-2">
+                      {sortConfig.sorts.map((sort, index) => {
+                        const fieldLabels = {
+                          key_chord: 'Hợp âm',
+                          title: 'Tên bài hát', 
+                          type_name: 'Thể loại',
+                          topic_name: 'Chủ đề'
+                        };
+                        return (
+                          <div key={sort.field} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                            <div>
+                              <span className="font-medium text-gray-700">
+                                {index + 1}. {fieldLabels[sort.field]}
+                              </span>
+                              <span className="ml-2 text-sm text-gray-500">
+                                ({sort.order === 'asc' ? 'A → Z' : 'Z → A'})
+                              </span>
+                            </div>
+                            <Button
+                              onClick={() => removeSort(sort.field)}
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

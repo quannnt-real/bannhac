@@ -1,7 +1,141 @@
 /* Lyrics Display Styles */
 .lyrics-content .lyric-container {
   line-height: var(--line-height);
+  /* Flexbox with iOS compatibility */
+  display: -webkit-box;      /* iOS < 7 */
+  display: -webkit-flex;     /* iOS 7-8 */
+  display: -ms-flexbox;      /* IE 10 */
+  display: flex;             /* Modern browsers */
+  
+  /* Flex-wrap with fallbacks for iOS */
+  -webkit-flex-wrap: wrap;
+  -ms-flex-wrap: wrap;
+  flex-wrap: wrap;
+  
+  /* Additional iOS fixes */
+  -webkit-box-orient: horizontal;
+  -webkit-box-direction: normal;
+  -webkit-flex-direction: row;
+  -ms-flex-direction: row;
+  flex-direction: row;
+  
+  /* Prevent iOS Safari from collapsing */
+  min-height: 1px;
+  width: 100%;
+}
+
+/* Inline Chords Container */
+.lyrics-content .inline-chord-container {
   margin-bottom: 1.5rem;
+}
+
+.lyrics-content .lyric-text-with-inline-chords {
+  /* iOS compatible flexbox */
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  -ms-flex-align: center;
+  align-items: center;
+  
+  -webkit-flex-wrap: wrap;
+  -ms-flex-wrap: wrap;
+  flex-wrap: wrap;
+  
+  gap: 0.5rem;
+  
+  /* iOS Safari specific fixes */
+  -webkit-box-orient: horizontal;
+  -webkit-box-direction: normal;
+  -webkit-flex-direction: row;
+  -ms-flex-direction: row;
+  flex-direction: row;
+}
+
+.lyrics-content .lyric-text-part {
+  color: #374151;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.lyrics-content .inline-chords-part {
+  /* iOS compatible flexbox */
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  -ms-flex-align: center;
+  align-items: center;
+  
+  gap: 0.5rem;
+  
+  -webkit-flex-wrap: wrap;
+  -ms-flex-wrap: wrap;
+  flex-wrap: wrap;
+  
+  /* iOS Safari specific fixes */
+  -webkit-box-orient: horizontal;
+  -webkit-box-direction: normal;
+  -webkit-flex-direction: row;
+  -ms-flex-direction: row;
+  flex-direction: row;
+}
+
+.lyrics-content .inline-chord {
+  font-weight: bold;
+  line-height: 1;
+  white-space: nowrap;
+  display: inline-block;
+  /* Use same styling as regular chord labels */
+  color: var(--chord-color);
+  background-color: var(--chord-bg);
+  border: 1px solid var(--chord-border);
+  font-size: var(--chord-font-size);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Legacy styles for backward compatibility */
+.lyrics-content .inline-chords-line {
+  /* iOS compatible flexbox */
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  
+  -webkit-box-pack: center;
+  -webkit-justify-content: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+  
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  -ms-flex-align: center;
+  align-items: center;
+  
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  min-height: 24px;
+  
+  /* iOS Safari specific fixes */
+  -webkit-box-orient: horizontal;
+  -webkit-box-direction: normal;
+  -webkit-flex-direction: row;
+  -ms-flex-direction: row;
+  flex-direction: row;
+}
+
+.lyrics-content .lyric-text {
+  text-align: center;
+  color: #374151;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .lyrics-content .chord-segment {
@@ -9,6 +143,7 @@
   display: inline-block;
   margin-right: 0.25rem;
   white-space: nowrap;
+  vertical-align: baseline;
 }
 
 .lyrics-content .chord-label {
@@ -33,6 +168,9 @@
   color: #374151;
   font-weight: 500;
   display: inline-block;
+  line-height: var(--lyric-font-size);
+  vertical-align: baseline;
+  padding-top: var(--text-padding-top);
 }
 
 .lyrics-content .lyric-word-no-chord {
@@ -42,6 +180,175 @@
   display: inline-block;
   margin-right: 0.25rem;
   padding-top: var(--text-padding-top);
+}
+
+.lyrics-content .lyric-text-segment {
+  font-size: var(--lyric-font-size);
+  color: #374151;
+  font-weight: 500;
+  display: inline-block;
+  white-space: pre-wrap; /* Preserve spaces and line breaks */
+  vertical-align: baseline;
+  line-height: var(--lyric-font-size);
+  padding-top: var(--text-padding-top);
+}
+
+/* Spaced layout for chords that are too close together */
+.lyrics-content .spaced-lyric-container {
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.lyrics-content .chord-text-pairs {
+  /* iOS compatible flexbox */
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  
+  -webkit-box-align: start;
+  -webkit-align-items: flex-start;
+  -ms-flex-align: start;
+  align-items: flex-start;
+  
+  -webkit-flex-wrap: wrap;
+  -ms-flex-wrap: wrap;
+  flex-wrap: wrap;
+  
+  gap: 0.5rem;
+  
+  /* iOS Safari specific fixes */
+  -webkit-box-orient: horizontal;
+  -webkit-box-direction: normal;
+  -webkit-flex-direction: row;
+  -ms-flex-direction: row;
+  flex-direction: row;
+}
+
+.lyrics-content .chord-text-pair {
+  /* iOS compatible flexbox */
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+  -webkit-flex-direction: column;
+  -ms-flex-direction: column;
+  flex-direction: column;
+  
+  -webkit-box-align: start;
+  -webkit-align-items: flex-start;
+  -ms-flex-align: start;
+  align-items: flex-start;
+  
+  margin-right: 0.5rem;
+}
+
+.lyrics-content .chord-above {
+  margin-bottom: 2px;
+  height: calc(var(--chord-font-size) + 8px);
+  /* iOS compatible flexbox */
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  
+  -webkit-box-align: end;
+  -webkit-align-items: flex-end;
+  -ms-flex-align: end;
+  align-items: flex-end;
+}
+
+.lyrics-content .text-below {
+  /* iOS compatible flexbox */
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  
+  -webkit-box-align: start;
+  -webkit-align-items: flex-start;
+  -ms-flex-align: start;
+  align-items: flex-start;
+}
+
+.lyrics-content .chord-row {
+  /* iOS compatible flexbox */
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  
+  -webkit-box-align: end;
+  -webkit-align-items: flex-end;
+  -ms-flex-align: end;
+  align-items: flex-end;
+  
+  margin-bottom: 2px;
+  height: calc(var(--chord-font-size) + 8px);
+}
+
+.lyrics-content .text-row {
+  /* iOS compatible flexbox */
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  
+  -webkit-box-align: start;
+  -webkit-align-items: flex-start;
+  -ms-flex-align: start;
+  align-items: flex-start;
+}
+
+.lyrics-content .chord-item {
+  /* iOS compatible flexbox */
+  display: -webkit-inline-box;
+  display: -webkit-inline-flex;
+  display: -ms-inline-flexbox;
+  display: inline-flex;
+  
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  -ms-flex-align: center;
+  align-items: center;
+  
+  -webkit-box-pack: center;
+  -webkit-justify-content: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+  
+  font-weight: bold;
+  white-space: nowrap;
+  font-size: var(--chord-font-size);
+  color: var(--chord-color);
+  background-color: var(--chord-bg);
+  border: 1px solid var(--chord-border);
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 2rem;
+  text-align: center;
+  line-height: 1;
+  height: calc(var(--chord-font-size) + 8px);
+  box-sizing: border-box;
+}
+
+.lyrics-content .chord-spacer {
+  display: inline-block;
+  min-width: 0.5rem;
+  height: calc(var(--chord-font-size) + 8px);
+  visibility: hidden;
+}
+
+.lyrics-content .text-segment {
+  display: inline-block;
+  font-size: var(--lyric-font-size);
+  color: #374151;
+  font-weight: 500;
+  white-space: pre-wrap;
+  min-width: 1rem;
 }
 
 /* Mobile responsiveness */
@@ -58,5 +365,155 @@
   .lyrics-content .lyric-word,
   .lyrics-content .lyric-word-no-chord {
     font-size: calc(var(--lyric-font-size) * 0.95);
+  }
+
+  /* Inline chords mobile styles with iOS fixes */
+  .lyrics-content .lyric-text-with-inline-chords {
+    gap: 0.25rem;
+    /* Fallback for iOS without gap support */
+    margin-right: -0.25rem;
+  }
+  
+  .lyrics-content .lyric-text-with-inline-chords > * {
+    margin-right: 0.25rem;
+  }
+  
+  .lyrics-content .inline-chords-part {
+    gap: 0.25rem;
+    /* Fallback for iOS without gap support */
+    margin-right: -0.25rem;
+  }
+  
+  .lyrics-content .inline-chords-part > * {
+    margin-right: 0.25rem;
+  }
+  
+  .lyrics-content .inline-chord {
+    font-size: calc(var(--chord-font-size) * 0.9);
+    padding: 1px 4px;
+  }
+  
+  .lyrics-content .lyric-text-part {
+    font-size: calc(var(--lyric-font-size) * 0.95);
+  }
+
+  /* Legacy mobile styles */
+  .lyrics-content .inline-chords-line {
+    gap: 0.5rem;
+    -webkit-flex-wrap: wrap;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+    /* Fallback for iOS without gap support */
+    margin-right: -0.5rem;
+  }
+  
+  .lyrics-content .inline-chords-line > * {
+    margin-right: 0.5rem;
+  }
+  
+  .lyrics-content .lyric-text {
+    font-size: calc(var(--lyric-font-size) * 0.95);
+  }
+
+  /* Spaced layout mobile styles with iOS fixes */
+  .lyrics-content .chord-text-pairs {
+    gap: 0.25rem;
+    /* Fallback for iOS without gap support */
+    margin-right: -0.25rem;
+  }
+  
+  .lyrics-content .chord-text-pairs > * {
+    margin-right: 0.25rem;
+  }
+  
+  .lyrics-content .chord-text-pair {
+    margin-right: 0.25rem;
+  }
+  
+  .lyrics-content .chord-item {
+    font-size: calc(var(--chord-font-size) * 0.9);
+    padding: 1px 4px;
+    min-width: 1.5rem;
+    height: calc(var(--chord-font-size) * 0.9 + 8px);
+    box-sizing: border-box;
+  }
+  
+  .lyrics-content .text-segment {
+    font-size: calc(var(--lyric-font-size) * 0.95);
+  }
+  
+  .lyrics-content .chord-spacer {
+    margin-right: 0.25rem;
+    height: calc(var(--chord-font-size) * 0.9 + 8px);
+  }
+}
+
+/* iOS specific fixes */
+/* Target iOS Safari specifically */
+@supports (-webkit-overflow-scrolling: touch) {
+  .lyrics-content .lyric-container {
+    /* Force hardware acceleration */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    
+    /* Prevent iOS from "optimizing" the layout */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    
+    /* Fix for iOS text rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  .lyrics-content .chord-segment {
+    /* Fix positioning issues on iOS */
+    position: relative;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+  
+  .lyrics-content .chord-label {
+    /* Ensure chord labels render properly */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+  }
+}
+
+/* Text Selection Support for PWA */
+@media (display-mode: standalone) {
+  /* Enable text selection for all lyric elements */
+  .lyrics-content, .lyric-container, .lyric-text-with-inline-chords,
+  .lyric-text, .chord-text, .inline-chord {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    -webkit-touch-callout: default;
+    touch-action: manipulation;
+  }
+  
+  /* Ensure chord and lyric spans are selectable */
+  .chord-above, .lyric-below, .word-container {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+  }
+}
+
+/* Additional iOS version specific fixes */
+@media screen and (-webkit-min-device-pixel-ratio: 1) and (max-device-width: 768px) {
+  /* iOS 7-8 specific fixes */
+  .lyrics-content .lyric-container {
+    /* Fallback to table layout for very old iOS */
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+  }
+  
+  @supports (display: flex) {
+    .lyrics-content .lyric-container {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+    }
   }
 }

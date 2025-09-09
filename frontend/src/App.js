@@ -36,8 +36,7 @@ const AppProvider = ({ children }) => {
           setFavorites(favoritesData);
         }
       } catch (error) {
-        console.error('Error loading favorites from localStorage:', error);
-        // Clear corrupted data
+        // Silent error - clear corrupted data
         localStorage.removeItem('songFavorites');
       }
     }
