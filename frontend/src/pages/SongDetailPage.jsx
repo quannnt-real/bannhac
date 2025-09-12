@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Heart, Music2, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import { ArrowLeft, Heart, Music2, ChevronLeft, ChevronRight, Settings, Play, X } from 'lucide-react';
 import { useAppContext } from '../App';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -79,6 +79,7 @@ const SongDetailPage = () => {
   const [isNavigating, setIsNavigating] = useState(false); // Track navigation state
   const [preloadProgress, setPreloadProgress] = useState(0); // Track preload progress
   const [isLoadingSong, setIsLoadingSong] = useState(true); // Track song loading state
+  const [showVideoPlayer, setShowVideoPlayer] = useState(false); // Video player panel state
 
   // Calculate font sizes: lyrics and chords linked, section independent
   const lyricFontSize = baseFontSize;
@@ -86,6 +87,25 @@ const SongDetailPage = () => {
 
   // Set page title based on song
   usePageTitle(song ? createPageTitle(song.title) : createPageTitle('Chi tiết bài hát'));
+
+  // Extract YouTube video ID from URL
+  const getYouTubeVideoId = (url) => {
+    if (!url) return null;
+    
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+      /youtube\.com\/.*[?&]v=([^&\n?#]+)/
+    ];
+    
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) return match[1];
+    }
+    return null;
+  };
+
+  const videoId = getYouTubeVideoId(song?.link_song);
+  const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}?enablejsapi=1` : null;
 
   useEffect(() => {
     // Force clear all states when ID changes to prevent DOM reuse issues
@@ -961,7 +981,7 @@ const SongDetailPage = () => {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div className="min-w-0 flex-1">
-                <h1 className="text-base font-bold text-gray-800 truncate">{song.title}</h1>
+                <h1 className="text-base font-bold text-gray-800 truncate uppercase">{song.title}</h1>
               </div>
             </div>
             
@@ -1027,25 +1047,71 @@ const SongDetailPage = () => {
                   </Button>
                 </div>
               )}
-              
-              <Button
-                onClick={() => {
-                  // Add haptic feedback
-                  if (window.navigator && window.navigator.vibrate) {
-                    window.navigator.vibrate(30);
-                  }
-                  toggleFavorite(song);
-                }}
-                variant="ghost"
-                size="sm"
-                className={`h-8 w-8 p-0 ${isFavorite(song.id) ? 'text-red-500 hover:text-red-600' : 'text-gray-400 hover:text-red-500'}`}
-              >
-                <Heart className={`h-4 w-4 ${isFavorite(song.id) ? 'fill-current' : ''}`} />
-              </Button>
+
+              {/* Video Player Button */}
+              {song?.link_song && (
+                <Button
+                  onClick={() => {
+                    // Add haptic feedback
+                    if (window.navigator && window.navigator.vibrate) {
+                      window.navigator.vibrate(30);
+                    }
+                    setShowVideoPlayer(!showVideoPlayer);
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className={`h-8 w-8 p-0 ${showVideoPlayer ? 'text-red-600 hover:text-red-700' : 'text-gray-400 hover:text-red-500'}`}
+                >
+                  <Play className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
         </div>
       </header>
+
+      {/* Compact Video Player Panel */}
+      {showVideoPlayer && song?.link_song && embedUrl && (
+        <div className="bg-black border-b border-gray-200 sticky top-[60px] z-30 flex justify-center">
+          <div className="w-full max-w-[600px] px-4 py-3">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-white text-sm font-medium truncate flex-1 mr-3">
+                {song.title} - Video hướng dẫn
+              </h3>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button
+                  onClick={() => window.open(song.link_song, '_blank')}
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-white hover:bg-white/20"
+                  title="Mở trên YouTube"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  </svg>
+                </Button>
+                <Button
+                  onClick={() => setShowVideoPlayer(false)}
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-white hover:bg-white/20"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden shadow-lg">
+              <iframe
+                src={embedUrl}
+                title={`${song.title} - Video hướng dẫn`}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content - More space for lyrics */}
       <div className="container mx-auto px-4 py-2 pb-20">

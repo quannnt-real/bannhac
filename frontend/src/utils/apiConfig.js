@@ -3,13 +3,13 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
   ? 'https://htnguonsong.com' // Backend API server
   : ''; // Empty string sẽ sử dụng proxy trong development
 
-// export const API_ENDPOINTS = {
-//   SONGS: `${API_BASE_URL}/api/songs`,
-//   SONGS_COUNT: `${API_BASE_URL}/api/songs/count`,
-//   SONGS_SYNC: `${API_BASE_URL}/api/songs/sync`,
-//   SONG_VIEW: `${API_BASE_URL}/api/songs/view`,
-//   // Thêm các endpoint khác nếu cần
-// };
+export const API_ENDPOINTS = {
+  SONGS: `${API_BASE_URL}/api/songs`,
+  SONGS_COUNT: `${API_BASE_URL}/api/songs/count`,
+  SONGS_SYNC: `${API_BASE_URL}/api/songs/sync`,
+  SONG_VIEW: `${API_BASE_URL}/api/songs/view`,
+  // Thêm các endpoint khác nếu cần
+};
 
 // Helper function để build API URL với params
 export const buildApiUrl = (endpoint, params = {}) => {

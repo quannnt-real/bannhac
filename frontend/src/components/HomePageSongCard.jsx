@@ -46,7 +46,7 @@ const HomePageSongCard = React.memo(({
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
             <h3 
-              className="font-semibold text-lg text-gray-800 group-hover:text-blue-600 cursor-pointer transition-colors truncate"
+              className="font-semibold text-md text-gray-800 group-hover:text-blue-600 cursor-pointer transition-colors truncate uppercase"
               onClick={handleTitleClick}
             >
               {song.title}
