@@ -1,4 +1,88 @@
 /* Lyrics Display Styles */
+
+/* ===== PWA-STYLE CHORD DISPLAY ===== */
+/* Modern inline chord display - PWA chord layout logic */
+.lyrics-content .pwa-style .chord-lyric-line {
+  position: relative;
+  display: block;
+  margin-bottom: -1.5rem; /* Tăng spacing để tránh overlap giữa các dòng */
+  line-height: 3em; /* Tăng line-height để chỗ cho chord */
+  font-size: var(--lyric-font-size);
+  color: #374151;
+  font-weight: 500;
+  padding-top: 1.2em; /* Thêm padding-top để chord không bị cắt */
+  min-height: 2.5em; /* Đảm bảo có đủ không gian cho chord */
+  margin-top: -1.5rem; /* Giảm khoảng cách giữa các dòng */
+}
+
+.lyrics-content .pwa-style .chord-lyric-line.empty-line {
+  line-height: 1.4em;
+  height: 1.4em;
+  min-height: 1.4em;
+  padding-top: 0;
+}
+
+.lyrics-content .pwa-style .chord-lyric-line.text-only {
+  margin-bottom: 1em;
+  line-height: 1.6em;
+  padding-top: 0.2em;
+  min-height: 1.6em;
+}
+
+.lyrics-content .pwa-style .pwa-chord-inline {
+  position: absolute;
+  display: inline-block;
+  margin-top: -1.3em; /* Đặt chord ở trên text trong PWA style */
+  left: 0;
+  top: 0;
+  z-index: 2;
+  pointer-events: none; /* Tránh ảnh hưởng đến click event của text */
+  line-height: 1em;
+}
+
+.lyrics-content .pwa-style .pwa-chord {
+  display: inline-block;
+  color: var(--chord-color);
+  background-color: var(--chord-bg);
+  border: 1px solid var(--chord-border);
+  font-size: var(--chord-font-size);
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+  white-space: nowrap;
+  margin-right: 12px; /* Tăng từ 8px lên 12px để tránh chồng chéo */
+  min-width: 32px; /* Tăng từ 24px lên 32px để đảm bảo chord có width tối thiểu */
+  padding-right: 4px; /* Thêm padding để tạo khoảng cách */
+}
+
+.lyrics-content .pwa-style .pwa-chord:hover {
+  text-decoration: underline;
+  opacity: 0.8;
+}
+
+.lyrics-content .pwa-style .pwa-lyric {
+  display: inline;
+  white-space: pre-wrap;
+  color: #374151;
+  font-weight: 500;
+  position: relative;
+  z-index: 1;
+  line-height: inherit;
+}
+
+.lyrics-content .pwa-style .pwa-chord-inline i {
+  display: inline-block;
+  margin-left: 0;
+  width: 0;
+  color: transparent;
+  font-style: normal;
+  font-size: 0;
+  line-height: 0;
+}
+
+/* ===== ORIGINAL STYLES (preserved for backward compatibility) ===== */
 .lyrics-content .lyric-container {
   line-height: var(--line-height);
   /* Flexbox with iOS compatibility */

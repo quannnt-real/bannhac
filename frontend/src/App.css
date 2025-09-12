@@ -1,3 +1,27 @@
 /* App.css - Only keep used styles */
 /* Note: All .App-* classes were unused and removed */
 /* If you need these styles, restore from backup */
+
+/* Notification Topbar Styles */
+.notification-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  transform: translateY(-100%);
+  transition: transform 0.3s ease-in-out;
+}
+
+.notification-topbar.show {
+  transform: translateY(0);
+}
+
+.notification-topbar.hide {
+  transform: translateY(-100%);
+}
+
+/* Ensure main content has proper spacing when notification is shown */
+.main-content {
+  transition: margin-top 0.3s ease-in-out;
+}

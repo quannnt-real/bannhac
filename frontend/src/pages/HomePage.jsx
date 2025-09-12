@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Music, Heart, Filter, ChevronUp, Wifi, WifiOff, Import } from 'lucide-react';
+import { Music, Heart, Filter, ChevronUp, Wifi, WifiOff, Import, Download, RefreshCw } from 'lucide-react';
 import { useAppContext } from '../App';
 import SearchBar from '../components/SearchBar';
 import HomePageSongCard from '../components/HomePageSongCard';
 import FilterPanel from '../components/FilterPanel';
 import ImportPanel from '../components/ImportPanel';
+import OfflineManagerPanel from '../components/OfflineManagerPanel';
+import ContactInfo from '../components/ContactInfo';
+import { offlineManager } from '../utils/offlineManager';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 // Import optimized hooks
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import { API_ENDPOINTS, buildApiUrl, apiCall } from '../utils/apiConfig';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const HomePage = () => {
   // Set page title
@@ -49,7 +52,11 @@ const HomePage = () => {
 
   const [showFilter, setShowFilter] = useState(false);
   const [showImportPanel, setShowImportPanel] = useState(false);
+  const [showOfflinePanel, setShowOfflinePanel] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [sortConfig, setSortConfig] = useState({
     sorts: [] // Array of sort objects: [{ field: 'chord', order: 'asc' }, { field: 'title', order: 'desc' }, ...]
   });
@@ -97,6 +104,76 @@ const HomePage = () => {
     setSortConfig({ sorts: [] });
   };
 
+  // PWA Install functionality
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      // Prevent Chrome 67 and earlier from automatically showing the prompt
+      e.preventDefault();
+      // Stash the event so it can be triggered later
+      setDeferredPrompt(e);
+      setShowInstallPrompt(true);
+    };
+
+    const handleAppInstalled = () => {
+      setShowInstallPrompt(false);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  // Network change listener - clear error when back online
+  useEffect(() => {
+    const handleOnline = async () => {
+      if (error && songs.length === 0) {
+        setError(null);
+        setLoading(true);
+        
+        // Auto retry data fetch when back online
+        try {
+          const syncResult = await offlineManager.performSmartSync();
+          if (syncResult.success && syncResult.syncedSongs > 0) {
+            const cachedSongs = await offlineManager.getCachedSongs();
+            if (cachedSongs.length > 0) {
+              setSongs(cachedSongs);
+              setAllSongs(cachedSongs);
+              setError(null);
+            }
+          }
+        } catch (retryError) {
+          setError('Không thể tải dữ liệu bài hát, vui lòng thử lại.');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [error, songs.length, setSongs, setAllSongs]); // Dependencies cần thiết
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      return;
+    }
+    // Show the prompt
+    deferredPrompt.prompt();
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    // We've used the prompt, and can't use it again, throw it away
+    setDeferredPrompt(null);
+    setShowInstallPrompt(false);
+  };
+
   // Function to check if a field is currently being sorted
   const getSortStatus = (field) => {
     const sort = sortConfig.sorts.find(s => s.field === field);
@@ -109,32 +186,71 @@ const HomePage = () => {
     };
   };
 
-  // Optimized fetch function - chỉ lấy data một lần, không depend on search
+  // Smart fetch function - chỉ tải dữ liệu đã có hoặc fallback
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Build API URL - lấy tất cả bài hát
-      const params = {
-        all: 'true' // Lấy tất cả bài hát, filter sẽ được thực hiện ở client-side
-      };
+      let finalData = null;
 
-      const apiUrl = buildApiUrl(API_ENDPOINTS.SONGS, params);
+      // Kiểm tra xem có cached data không
+      await offlineManager.ensureInitialized();
+      const cachedSongs = await offlineManager.getCachedSongs();
+      
+      if (cachedSongs.length > 0) {
+        // Có data → sử dụng ngay
+        finalData = cachedSongs;
+      } else {
+        // Không có data → cần tải từ đầu
+        if (navigator.onLine) {
+          const syncResult = await offlineManager.performSmartSync('initial');
+          
+          if (syncResult.success && syncResult.syncedSongs > 0) {
+            
+            // Get cached songs after initial sync
+            const newCachedSongs = await offlineManager.getCachedSongs();
+            finalData = newCachedSongs;
+            
+            // Start lyrics sync in background if we have songs
+            if (newCachedSongs.length > 0) {
+              
+              // Start lyrics sync in background (don't wait)
+              offlineManager.performFullLyricsSync((progress) => {
+              }).then(result => {
+                
+                // Dispatch event for notification system
+                if (result.success && result.totalSongs > 0) {
+                  window.dispatchEvent(new CustomEvent('syncNotification', {
+                    detail: { 
+                      type: 'lyrics_sync_complete', 
+                      totalSongs: result.totalSongs,
+                      syncedCount: result.syncedCount 
+                    }
+                  }));
+                }
+              });
+            }
+          } else {
+            setError('Không thể tải dữ liệu bài hát. Vui lòng thử lại.');
+            return;
+          }
+        } else {
+          setError('Không thể tải dữ liệu bài hát. Vui lòng kết nối mạng và thử lại.');
+          return;
+        }
+      }
 
-      // Gọi API với config mới
-      const data = await apiCall(apiUrl, {
-        method: 'GET',
-        mode: 'cors'
-      });
-
-      if (data.success) {
-        setSongs(data.data);
-        setAllSongs(data.data);
+      if (finalData && finalData.length > 0) {
+        setSongs(finalData);
+        setAllSongs(finalData);
+        
+        // Clear any previous errors
+        setError(null);
         
         // Tạo types và topics từ songs data - optimized with Map
         const typesMap = new Map();
         const topicsMap = new Map();
         
-        data.data.forEach(song => {
+        finalData.forEach(song => {
           // Collect unique types
           if (song.type_id && song.type_name) {
             typesMap.set(song.type_id, {
@@ -159,40 +275,208 @@ const HomePage = () => {
         setTypes(uniqueTypes);
         setTopics(uniqueTopics);
         
-        // Save to localStorage for offline access
-        localStorage.setItem('songs_data', JSON.stringify(data.data));
-        localStorage.setItem('types_data', JSON.stringify(uniqueTypes));
-        localStorage.setItem('topics_data', JSON.stringify(uniqueTopics));
+        // Data already cached by offlineManager, no need for localStorage
+      } else {
+        setError('Không thể tải dữ liệu bài hát');
       }
 
-      setIsOffline(false);
+      // setIsOffline(false); // Managed by useOffline hook now
     } catch (error) {
-      console.error('Fetch error:', error);
-      if (error.message.includes('fetch') || error.name === 'TypeError') {
-          setIsOffline(true);
-      }
       
-      // Load from localStorage if offline
-      const savedSongs = localStorage.getItem('songs_data');
-      const savedTypes = localStorage.getItem('types_data');
-      const savedTopics = localStorage.getItem('topics_data');
-      
-      if (savedSongs) {
-        const songsData = JSON.parse(savedSongs);
-        setSongs(songsData);
-        setAllSongs(songsData);
-      }
-      if (savedTypes) setTypes(JSON.parse(savedTypes));
-      if (savedTopics) setTopics(JSON.parse(savedTopics));
+      // IndexedDB-only strategy: No localStorage fallback
+      setError('Không thể tải dữ liệu. Vui lòng đồng bộ dữ liệu từ mạng trước.');
+      setSongs([]);
+      setAllSongs([]);
+      setTypes([]);
+      setTopics([]);
     } finally {
       setLoading(false);
     }
-  }, [setSongs, setTypes, setTopics, setIsOffline]); // Removed searchTerm from deps
+  }, []); // Empty dependency array - không depend vào state setters
+
+  // Manual sync function - chỉ chạy khi user nhấn "Đồng bộ ngay"
+  const performManualSync = useCallback(async () => {
+    if (!navigator.onLine) {
+      return;
+    }
+
+    try {
+      const syncResult = await offlineManager.performSmartSync();
+    } catch (error) {
+    }
+  }, []);
 
   // Initial data fetch - chỉ gọi một lần khi component mount
   useEffect(() => {
     fetchData();
   }, []); // Empty dependency array - chỉ chạy một lần
+
+  // Listen for online/offline changes to refetch data if needed
+  useEffect(() => {
+    const handleOnline = () => {
+      // Only refetch if we previously had an error and no songs
+      if (error && songs.length === 0) {
+        setError(''); // Clear previous error
+        fetchData();
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [error, fetchData]);
+
+  // Listen for sync completion events to update UI and sync lyrics for new songs
+  useEffect(() => {
+    const handleSyncComplete = async (event) => {
+      try {
+        const { detail } = event;
+        
+        // Refresh songs data after successful sync
+        const updatedSongs = await offlineManager.getCachedSongs();
+        if (updatedSongs.length > 0) {
+          setSongs(updatedSongs);
+          setAllSongs(updatedSongs);
+          
+          // Update types and topics từ updatedSongs
+          const typesMap = new Map();
+          const topicsMap = new Map();
+          
+          updatedSongs.forEach(song => {
+            // Collect unique types
+            if (song.type_id && song.type_name) {
+              typesMap.set(song.type_id, {
+                id: song.type_id,
+                name: song.type_name
+              });
+            }
+            
+            // Collect unique topics
+            if (song.topic_id && song.topic_name) {
+              topicsMap.set(song.topic_id, {
+                id: song.topic_id,
+                name: song.topic_name
+              });
+            }
+          });
+          
+          const uniqueTypes = Array.from(typesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+          const uniqueTopics = Array.from(topicsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+          
+          setTypes(uniqueTypes);
+          setTopics(uniqueTopics);
+          
+          // Clear any previous errors
+          setError(null);
+          
+          // Nếu có bài hát mới, sync lyrics cho chúng
+          if (detail && (detail.newSongs > 0 || detail.updatedSongs > 0)) {
+            // Tạo danh sách các bài hát cần force refresh lyrics
+            // Lấy tất cả bài hát có updated_date mới nhất để đảm bảo lyrics được cập nhật
+            const recentlyUpdatedIds = updatedSongs
+              .sort((a, b) => new Date(b.updated_date) - new Date(a.updated_date))
+              .slice(0, detail.newSongs + detail.updatedSongs)
+              .map(song => song.id);
+            
+            // Start lyrics sync in background for new/updated songs
+            offlineManager.performFullLyricsSync((progress) => {
+              // Optional: có thể thêm progress indicator sau
+            }, recentlyUpdatedIds).then(result => {
+              if (result.success && result.syncedCount > 0) {
+                console.log(`Đã sync lyrics cho ${result.syncedCount} bài hát mới`);
+                
+                // Hiển thị thông báo hoàn tất
+                if (detail.newSongs > 0 && detail.updatedSongs > 0) {
+                  window.dispatchEvent(new CustomEvent('syncNotification', {
+                    detail: { 
+                      type: 'lyrics_sync_complete', 
+                      message: `Hoàn tất: Thêm ${detail.newSongs} và cập nhật ${detail.updatedSongs} bài hát`
+                    }
+                  }));
+                } else if (detail.newSongs > 0) {
+                  window.dispatchEvent(new CustomEvent('syncNotification', {
+                    detail: { 
+                      type: 'lyrics_sync_complete', 
+                      message: `Hoàn tất: Thêm ${detail.newSongs} bài hát mới`
+                    }
+                  }));
+                } else if (detail.updatedSongs > 0) {
+                  window.dispatchEvent(new CustomEvent('syncNotification', {
+                    detail: { 
+                      type: 'lyrics_sync_complete', 
+                      message: `Hoàn tất: Cập nhật ${detail.updatedSongs} bài hát`
+                    }
+                  }));
+                }
+              } else {
+                console.log('Lyrics sync completed but no new lyrics were downloaded');
+                
+                // Vẫn hiển thị thông báo hoàn tất metadata
+                if (detail.newSongs > 0 && detail.updatedSongs > 0) {
+                  window.dispatchEvent(new CustomEvent('syncNotification', {
+                    detail: { 
+                      type: 'lyrics_sync_complete', 
+                      message: `Thêm ${detail.newSongs} và cập nhật ${detail.updatedSongs} bài hát`
+                    }
+                  }));
+                } else if (detail.newSongs > 0) {
+                  window.dispatchEvent(new CustomEvent('syncNotification', {
+                    detail: { 
+                      type: 'lyrics_sync_complete', 
+                      message: `Thêm ${detail.newSongs} bài hát mới`
+                    }
+                  }));
+                } else if (detail.updatedSongs > 0) {
+                  window.dispatchEvent(new CustomEvent('syncNotification', {
+                    detail: { 
+                      type: 'lyrics_sync_complete', 
+                      message: `Cập nhật ${detail.updatedSongs} bài hát`
+                    }
+                  }));
+                }
+              }
+            }).catch(error => {
+              console.error('Error syncing lyrics for new songs:', error);
+              
+              // Vẫn hiển thị thông báo hoàn tất metadata ngay cả khi lyrics sync lỗi
+              if (detail.newSongs > 0 && detail.updatedSongs > 0) {
+                window.dispatchEvent(new CustomEvent('syncNotification', {
+                  detail: { 
+                    type: 'lyrics_sync_complete', 
+                    message: `Thêm ${detail.newSongs} và cập nhật ${detail.updatedSongs} bài hát`
+                  }
+                }));
+              } else if (detail.newSongs > 0) {
+                window.dispatchEvent(new CustomEvent('syncNotification', {
+                  detail: { 
+                    type: 'lyrics_sync_complete', 
+                    message: `Thêm ${detail.newSongs} bài hát mới`
+                  }
+                }));
+              } else if (detail.updatedSongs > 0) {
+                window.dispatchEvent(new CustomEvent('syncNotification', {
+                  detail: { 
+                    type: 'lyrics_sync_complete', 
+                    message: `Cập nhật ${detail.updatedSongs} bài hát`
+                  }
+                }));
+              }
+            });
+          }
+        }
+      } catch (updateError) {
+        console.error('Error updating data after sync:', updateError);
+      }
+    };
+
+    window.addEventListener('offlineSyncComplete', handleSyncComplete);
+    
+    return () => {
+      window.removeEventListener('offlineSyncComplete', handleSyncComplete);
+    };
+  }, []); // Empty dependency array to prevent infinite loops
 
   // Utility function để normalize text cho tìm kiếm thông minh
   const normalizeText = (text) => {
@@ -235,17 +519,6 @@ const HomePage = () => {
     
     // Simple substring matching after cleaning
     const result = cleanText.includes(cleanTerm);
-    
-    // Debug logging for specific search term (comment out in production)
-    // if (searchTerm.toLowerCase().includes('vinh danh')) {
-    //   console.log('Debug search:', {
-    //     originalText: text.substring(0, 100) + '...',
-    //     cleanText: cleanText.substring(0, 100) + '...',
-    //     searchTerm: searchTerm,
-    //     cleanTerm: cleanTerm,
-    //     result: result
-    //   });
-    // }
     
     // Cache the result (limit cache size to prevent memory issues)
     if (searchCache.current.size > 1000) {
@@ -479,6 +752,30 @@ const HomePage = () => {
                 <Import className="h-4 w-4" />
                 <span className="hidden sm:inline">Nhập mã</span>
               </Button>
+
+              {/* PWA Install Button */}
+              {showInstallPrompt && (
+                <Button
+                  onClick={handleInstallClick}
+                  variant="outline"
+                  className="flex items-center gap-2 border-blue-200 text-blue-600 hover:bg-blue-50"
+                  title="Cài đặt ứng dụng lên thiết bị"
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="hidden sm:inline">Cài App</span>
+                </Button>
+              )}
+
+              {/* Offline Sync Button */}
+              <Button
+                onClick={() => setShowOfflinePanel(true)}
+                variant="outline"
+                className="flex items-center gap-2 border-purple-200 text-purple-600 hover:bg-purple-50"
+                title="Đồng bộ dữ liệu WiFi/4G và offline"
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span className="hidden sm:inline">Đồng bộ</span>
+              </Button>
               
               <Button
                 onClick={() => navigate('/favorites')}
@@ -529,26 +826,41 @@ const HomePage = () => {
 
       {/* Main content */}
       <main className="container mx-auto px-4 py-6 pb-32">
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600 font-medium">⚠️ {error}</p>
+            <button 
+              onClick={() => {setError(null); fetchData();}} 
+              className="mt-2 text-sm text-red-700 underline hover:no-underline"
+            >
+              Thử lại
+            </button>
+          </div>
+        )}
+        
         <div className="mb-6">
-          <p className="text-gray-600">
-            {loading ? (
-              'Đang tải...'
-            ) : (
-              <>
-                Tìm thấy <span className="font-semibold text-blue-600">
-                  {filteredSongs.length}
-                </span> / <span className="font-semibold text-gray-600">
-                  {allSongs.length}
-                </span> bài hát
-                {searchTerm && (
-                  <span> cho từ khóa "<span className="font-semibold">{searchTerm}</span>"</span>
-                )}
-                {isOffline && (
-                  <span className="ml-2 text-orange-600 text-sm">(Chế độ offline)</span>
-                )}
-              </>
-            )}
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="text-gray-600">
+              {loading ? (
+                'Đang tải...'
+              ) : (
+                <>
+                  Tìm thấy <span className="font-semibold text-blue-600">
+                    {filteredSongs.length}
+                  </span> / <span className="font-semibold text-gray-600">
+                    {allSongs.length}
+                  </span> bài hát
+                  {searchTerm && (
+                    <span> cho từ khóa "<span className="font-semibold">{searchTerm}</span>"</span>
+                  )}
+                  {isOffline && (
+                    <span className="ml-2 text-orange-600 text-sm">(Chế độ offline)</span>
+                  )}
+                </>
+              )}
+            </p>
+            {!loading && <ContactInfo />}
+          </div>
           {!searchTerm && (
             <p className="hidden md:block text-gray-400 text-sm mt-1">
               💡 Mẹo: Nhấn <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">Ctrl</kbd> + <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">F</kbd> (hoặc <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">⌘</kbd> + <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">F</kbd>) để tìm kiếm nhanh
@@ -639,6 +951,11 @@ const HomePage = () => {
         isOpen={showImportPanel}
         onClose={() => setShowImportPanel(false)}
       />
+
+      {/* Offline Manager Panel */}
+      {showOfflinePanel && (
+        <OfflineManagerPanel onClose={() => setShowOfflinePanel(false)} />
+      )}
     </div>
   );
 };

@@ -1,59 +1,56 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import QRCode from 'qrcode';
 import { X, Copy, Share2, Check, Calendar } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
+import DonateInfo from './DonateInfo';
 
 const QRCodeWithLogo = ({ value, size = 200, logoSrc = "/Logo_app.png" }) => {
   const canvasRef = useRef(null);
 
   useEffect(() => {
     const generateQR = async () => {
-      try {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-        // Generate QR code to canvas
-        await QRCode.toCanvas(canvas, value, {
-          width: size,
-          margin: 1,
-          color: {
-            dark: '#000000',
-            light: '#FFFFFF'
-          },
-          errorCorrectionLevel: 'H' // High error correction for logo overlay
-        });
+      // Generate QR code to canvas
+      await QRCode.toCanvas(canvas, value, {
+        width: size,
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        },
+        errorCorrectionLevel: 'H' // High error correction for logo overlay
+      });
 
-        // Add logo overlay
-        const ctx = canvas.getContext('2d');
-        const logo = new Image();
+      // Add logo overlay
+      const ctx = canvas.getContext('2d');
+      const logo = new Image();
+      
+      logo.onload = () => {
+        // Logo with custom dimensions (84x48px ratio)
+        const logoWidth = 84;
+        const logoHeight = 48;
+        const x = (size - logoWidth) / 2;
+        const y = (size - logoHeight) / 2;
         
-        logo.onload = () => {
-          // Logo with custom dimensions (84x48px ratio)
-          const logoWidth = 84;
-          const logoHeight = 48;
-          const x = (size - logoWidth) / 2;
-          const y = (size - logoHeight) / 2;
-          
-          // Draw white background for logo with padding
-          const padding = 6;
-          ctx.fillStyle = 'white';
-          ctx.fillRect(x - padding, y - padding, logoWidth + (padding * 2), logoHeight + (padding * 2));
-          
-          // Optional: Draw border around logo background
-          ctx.strokeStyle = '#f0f0f0';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(x - padding, y - padding, logoWidth + (padding * 2), logoHeight + (padding * 2));
-          
-          // Draw logo with correct dimensions (preserving aspect ratio)
-          ctx.drawImage(logo, x, y, logoWidth, logoHeight);
-        };
+        // Draw white background for logo with padding
+        const padding = 6;
+        ctx.fillStyle = 'white';
+        ctx.fillRect(x - padding, y - padding, logoWidth + (padding * 2), logoHeight + (padding * 2));
         
-        logo.crossOrigin = 'anonymous';
-        logo.src = logoSrc;
-      } catch (error) {
-        console.error('Error generating QR code:', error);
-      }
+        // Optional: Draw border around logo background
+        ctx.strokeStyle = '#f0f0f0';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - padding, y - padding, logoWidth + (padding * 2), logoHeight + (padding * 2));
+        
+        // Draw logo with correct dimensions (preserving aspect ratio)
+        ctx.drawImage(logo, x, y, logoWidth, logoHeight);
+      };
+      
+      logo.crossOrigin = 'anonymous';
+      logo.src = logoSrc;
     };
 
     if (value) {
@@ -142,7 +139,7 @@ const SharePanel = ({ isOpen, onClose, shareUrl, title = "Chia sẻ Playlist", o
         onUpdateShareUrl(newShareUrl);
       }
     }
-  }, [selectedDate, shareUrl, onUpdateShareUrl]);
+  }, [selectedDate, shareUrl]); // Removed onUpdateShareUrl from dependencies
 
   // Reset to original URL and today's date when panel opens
   useEffect(() => {
@@ -335,9 +332,12 @@ const SharePanel = ({ isOpen, onClose, shareUrl, title = "Chia sẻ Playlist", o
             <p className="text-xs text-gray-500">
               My Heart Belong to Jesus
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 mb-3">
               Quét mã QR hoặc copy link/mã PWA để chia sẻ
             </p>
+            
+            {/* Donate Information */}
+            <DonateInfo variant="compact" className="mt-2" />
           </div>
         </CardContent>
       </Card>

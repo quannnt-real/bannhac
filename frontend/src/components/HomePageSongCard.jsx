@@ -13,12 +13,10 @@ const HomePageSongCard = React.memo(({
 }) => {
   // Validate required props
   if (!song) {
-    console.warn('HomePageSongCard: song prop is required');
     return null;
   }
 
   if (typeof song.id === 'undefined') {
-    console.warn('HomePageSongCard: song.id is required');
     return null;
   }
 

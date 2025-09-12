@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { parseLyrics, transposeChord, getAvailableKeys } from '../utils/chordUtils';
-import { API_ENDPOINTS, apiCall } from '../utils/apiConfig';
+import { offlineManager } from '../utils/offlineManager';
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
+import { useOffline } from '../contexts/OfflineContext';
 import { retrieveKeys, cleanupOldKeys, storeKeys } from '../utils/keyStorage';
 import '../components/LyricsDisplay.css';
 
@@ -17,7 +18,8 @@ const SongDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { favorites, toggleFavorite, isFavorite, isOffline } = useAppContext();
+  const { favorites, toggleFavorite, isFavorite } = useAppContext();
+  const { isOffline } = useOffline();
   
   // Playlist navigation states
   const playlistParam = searchParams.get('playlist');
@@ -96,24 +98,30 @@ const SongDetailPage = () => {
     
     const fetchSongDetail = async () => {
       try {
-        const data = await apiCall(`${API_ENDPOINTS.SONG_VIEW}/${id}`);
+        let finalSongData = null;
+
+        // Load from IndexedDB first (IndexedDB-only strategy)
+        const cachedSongDetail = await offlineManager.getCachedSongDetail(parseInt(id));
         
-        if (data.success) {
-          setSong(data.data);
-          setCurrentKey(data.data.key_chord || 'C'); // Fallback to 'C' if no key_chord
+        if (cachedSongDetail && (cachedSongDetail.lyric || cachedSongDetail.lyrics) && 
+            (cachedSongDetail.lyric?.trim() !== '' || cachedSongDetail.lyrics?.trim() !== '')) {
+          finalSongData = cachedSongDetail;
         } else {
-          navigate('/');
+          // Try basic song metadata if no detailed lyrics
+          const basicSong = await offlineManager.getCachedSong(parseInt(id));
+          if (basicSong) {
+            finalSongData = basicSong;
+          }
+        }
+
+        if (finalSongData) {
+          setSong(finalSongData);
+          setCurrentKey(finalSongData.key_chord || 'C');
+        } else {
+          setError('Không tìm thấy bài hát trong dữ liệu offline. Vui lòng đồng bộ dữ liệu trước.');
         }
       } catch (error) {
-        // Try to load from localStorage if offline
-        const offlineData = localStorage.getItem(`song_${id}`);
-        if (offlineData) {
-          const songData = JSON.parse(offlineData);
-          setSong(songData);
-          setCurrentKey(songData.key_chord || 'C'); // Fallback to 'C' if no key_chord
-        } else {
-          navigate('/');
-        }
+        setError('Lỗi khi tải dữ liệu bài hát từ IndexedDB.');
       } finally {
         setIsLoadingSong(false);
       }
@@ -121,6 +129,41 @@ const SongDetailPage = () => {
 
     fetchSongDetail();
   }, [id, navigate]);
+
+  // Listen for sync completion events to refresh song details
+  useEffect(() => {
+    const handleSyncComplete = async (event) => {
+      try {
+        // Reload song details if this song might have been updated
+        const currentSongId = parseInt(id);
+        if (currentSongId) {
+          // Refresh song detail from IndexedDB
+          const updatedSongDetail = await offlineManager.getCachedSongDetail(currentSongId);
+          
+          if (updatedSongDetail && (updatedSongDetail.lyric || updatedSongDetail.lyrics) && 
+              (updatedSongDetail.lyric?.trim() !== '' || updatedSongDetail.lyrics?.trim() !== '')) {
+            setSong(updatedSongDetail);
+            console.log(`Refreshed song detail for ID ${currentSongId} after sync`);
+          } else {
+            // Try basic song metadata if no detailed lyrics
+            const basicSong = await offlineManager.getCachedSong(currentSongId);
+            if (basicSong && (!song || basicSong.updated_date !== song.updated_date)) {
+              setSong(basicSong);
+              console.log(`Refreshed basic song data for ID ${currentSongId} after sync`);
+            }
+          }
+        }
+      } catch (updateError) {
+        console.error('Error refreshing song after sync:', updateError);
+      }
+    };
+
+    window.addEventListener('offlineSyncComplete', handleSyncComplete);
+    
+    return () => {
+      window.removeEventListener('offlineSyncComplete', handleSyncComplete);
+    };
+  }, [id, song]); // Include song to compare updated_date
 
   // Memoize để tránh re-render không cần thiết
   const memoizedPlaylistIds = useMemo(() => 
@@ -131,44 +174,47 @@ const SongDetailPage = () => {
   // Load playlist songs nếu có playlist context
   useEffect(() => {
     if (memoizedPlaylistIds.length > 0) {
-      // Load từ localStorage (tương tự SharedPlaylistPage)
-      const cachedSongs = localStorage.getItem('songs_data');
-      if (cachedSongs) {
+      const loadPlaylistSongs = async () => {
         try {
-          const allSongs = JSON.parse(cachedSongs);
+          // Load từ IndexedDB thay vì localStorage
+          await offlineManager.init();
           const orderedPlaylistSongs = [];
           
-          memoizedPlaylistIds.forEach(songId => {
-            const playlistSong = allSongs.find(s => s && s.id === songId);
-            if (playlistSong) {
-              orderedPlaylistSongs.push(playlistSong);
+          for (const songId of memoizedPlaylistIds) {
+            try {
+              const song = await offlineManager.getCachedSong(songId);
+              if (song) {
+                orderedPlaylistSongs.push(song);
+              }
+            } catch (error) {
             }
-          });
+          }
           
           setPlaylistSongs(orderedPlaylistSongs);
         } catch (error) {
-          console.error('Error parsing cached songs:', error);
-          setPlaylistSongs([]);
-        }
-      } else if (fromParam === 'favorites') {
-        // Fallback: sử dụng favorites từ context
-        const orderedPlaylistSongs = [];
-        memoizedPlaylistIds.forEach(songId => {
-          const favSong = favorites.find(s => s && s.id === songId);
-          if (favSong) {
-            orderedPlaylistSongs.push(favSong);
+          
+          // Fallback: sử dụng favorites từ context nếu đang ở favorites page
+          if (fromParam === 'favorites') {
+            const orderedPlaylistSongs = [];
+            memoizedPlaylistIds.forEach(songId => {
+              const favSong = favorites.find(s => s && s.id === songId);
+              if (favSong) {
+                orderedPlaylistSongs.push(favSong);
+              }
+            });
+            setPlaylistSongs(orderedPlaylistSongs);
           }
-        });
-        setPlaylistSongs(orderedPlaylistSongs);
-      }
+        }
+      };
+      
+      loadPlaylistSongs();
     }
   }, [memoizedPlaylistIds, favorites, fromParam]);
 
   useEffect(() => {
     if (song?.lyric) {
       setParsedLyrics(parseLyrics(song.lyric));
-      // Save to localStorage for offline access
-      localStorage.setItem(`song_${song.id}`, JSON.stringify(song));
+      // Data is already cached in IndexedDB by offlineManager, no need for localStorage
     }
   }, [song]);
 
@@ -193,11 +239,6 @@ const SongDetailPage = () => {
     setCurrentFavoriteIndex(index);
   }, [favorites, id]);
 
-  // Debug useEffect to track currentKey changes
-  useEffect(() => {
-    // Debug removed for production
-  }, [currentKey, song?.key_chord]);
-
   // Preload entire playlist for smooth navigation
   useEffect(() => {
     const preloadPlaylist = async () => {
@@ -205,17 +246,12 @@ const SongDetailPage = () => {
 
       setPreloadProgress(0);
       
-      // Batch preload all songs in playlist
+      // Batch preload all songs in playlist with offline support
       let completedCount = 0;
       const preloadPromises = playlistSongs.map(async (playlistSong, index) => {
         try {
-          const cachedSong = localStorage.getItem(`song_${playlistSong.id}`);
-          if (!cachedSong) {
-            const data = await apiCall(`${API_ENDPOINTS.SONG_VIEW}/${playlistSong.id}`);
-            if (data.success) {
-              localStorage.setItem(`song_${playlistSong.id}`, JSON.stringify(data.data));
-            }
-          }
+          const data = await fetchSongById(playlistSong.id);
+          // Data is automatically cached by fetchSongById
           
           completedCount++;
           setPreloadProgress(Math.round((completedCount / playlistSongs.length) * 100));
@@ -253,7 +289,6 @@ const SongDetailPage = () => {
 
   const transposeUp = () => {
     if (!song?.key_chord) {
-      console.warn('No key_chord available for transposition');
       return;
     }
     
@@ -293,13 +328,11 @@ const SongDetailPage = () => {
       
       setCurrentKey(nextKey);
     } catch (error) {
-      console.error('Error in transposeUp:', error);
     }
   };
 
   const transposeDown = () => {
     if (!song?.key_chord) {
-      console.warn('No key_chord available for transposition');
       return;
     }
     
@@ -329,14 +362,12 @@ const SongDetailPage = () => {
       
       setCurrentKey(prevKey);
     } catch (error) {
-      console.error('Error in transposeDown:', error);
     }
   };
 
   // Hàm chuyển tone theo 1 cung (2 semitones)
   const transposeByWholeTone = (direction) => {
     if (!song?.key_chord) {
-      console.warn('No key_chord available for transposition');
       return;
     }
     
@@ -386,7 +417,6 @@ const SongDetailPage = () => {
       
       setCurrentKey(targetKey);
     } catch (error) {
-      console.error('Error in transposeByWholeTone:', error);
     }
   };
 
@@ -403,8 +433,6 @@ const SongDetailPage = () => {
     const nextSong = favorites[newIndex];
     if (nextSong && nextSong.id) {
       navigate(`/song/${nextSong.id}`);
-    } else {
-      console.warn('Invalid favorite song');
     }
   };
 
@@ -421,7 +449,6 @@ const SongDetailPage = () => {
     
     const nextSong = playlistSongs[newIndex];
     if (!nextSong || !nextSong.id) {
-      console.warn('Invalid next song');
       return;
     }
     
@@ -438,7 +465,6 @@ const SongDetailPage = () => {
       
       navigate(navUrl);
     } catch (error) {
-      console.error('Error navigating in playlist:', error);
     }
   };
 
@@ -541,7 +567,6 @@ const SongDetailPage = () => {
       try {
         return transposeChord(chord, song.key_chord, currentKey);
       } catch (error) {
-        console.warn('Error transposing chord:', chord, error);
         return chord;
       }
     }).sort();
@@ -550,7 +575,7 @@ const SongDetailPage = () => {
   const renderLyricLine = (line, index) => {
     if (line.type === 'section') {
       return (
-        <div key={index} className="my-4 text-left">
+        <div key={index} className="my-2 text-left">
           <Badge 
           variant="outline" 
           className="font-semibold rounded-md border capitalize"
@@ -574,7 +599,6 @@ const SongDetailPage = () => {
           try {
             return transposeChord(chord, song.key_chord, currentKey);
           } catch (error) {
-            console.warn('Error transposing inline chord:', chord, error);
             return chord;
           }
         }
@@ -618,7 +642,118 @@ const SongDetailPage = () => {
       // Sort chords by position for easier processing
       const sortedChords = [...line.chords].sort((a, b) => a.position - b.position);
       
-      // Check if chords are too close together (spacing issue)
+      // Use PWA-style chord display logic
+      if (sortedChords.length > 0) {
+        // Transpose all chords
+        const transposedChords = sortedChords.map(chordInfo => ({
+          ...chordInfo,
+          chord: chordInfo.chord && song?.key_chord && currentKey !== song.key_chord 
+            ? transposeChord(chordInfo.chord, song.key_chord, currentKey)
+            : chordInfo.chord
+        }));
+
+        // Create PWA-style display with inline chords
+        const lineText = line.text;
+        const lineElements = [];
+        let lastPos = 0;
+
+        // Đảm bảo khoảng cách tối thiểu giữa các chord
+        const adjustedChords = [];
+        let lastAdjustedPos = 0;
+        
+        transposedChords.forEach((chordInfo, index) => {
+          let adjustedPos = Math.max(chordInfo.position, lastAdjustedPos);
+          
+          // Đảm bảo khoảng cách tối thiểu 4 ký tự giữa các chord
+          if (index > 0) {
+            const minDistance = 4;
+            const previousChordLength = adjustedChords[index - 1].chord ? 
+              adjustedChords[index - 1].chord.length : 2;
+            const requiredPos = lastAdjustedPos + minDistance + previousChordLength;
+            adjustedPos = Math.max(adjustedPos, requiredPos);
+          }
+          
+          adjustedChords.push({
+            ...chordInfo,
+            position: adjustedPos
+          });
+          
+          lastAdjustedPos = adjustedPos;
+        });
+
+        // Process each chord position with adjusted positions
+        adjustedChords.forEach((chordInfo, index) => {
+          const chordPos = chordInfo.position;
+          const originalPos = transposedChords[index].position;
+          
+          // Add text before this chord (sử dụng vị trí gốc)
+          if (lastPos < originalPos) {
+            const textBefore = lineText.substring(lastPos, originalPos);
+            lineElements.push(
+              <span key={`text-${index}`} className="pwa-lyric">
+                {textBefore}
+              </span>
+            );
+          }
+          
+          // Thêm khoảng trắng nếu chord bị đẩy xa hơn vị trí gốc
+          if (chordPos > originalPos) {
+            const extraSpaces = chordPos - originalPos;
+            lineElements.push(
+              <span key={`space-${index}`} className="pwa-lyric">
+                {' '.repeat(extraSpaces)}
+              </span>
+            );
+          }
+          
+          // Add chord inline at position
+          lineElements.push(
+            <span key={`pos-${index}`} className="pwa-lyric" style={{ position: 'relative' }}>
+              <span className="pwa-chord-inline">
+                <span className="pwa-chord">
+                  <span dangerouslySetInnerHTML={{ __html: formatChord(chordInfo.chord) }}></span>
+                </span>
+              </span>
+              {/* Add a zero-width character at chord position */}
+              <i></i>
+            </span>
+          );
+          
+          lastPos = originalPos;
+        });
+
+        // Add remaining text after last chord
+        if (lastPos < lineText.length) {
+          const remainingText = lineText.substring(lastPos);
+          lineElements.push(
+            <span key="text-end" className="pwa-lyric">
+              {remainingText}
+            </span>
+          );
+        }
+
+        return (
+          <div key={index} className="pwa-style">
+            <div className="chord-lyric-line">
+              {lineElements}
+            </div>
+          </div>
+        );
+      } else {
+        // Line with no chords
+        return (
+          <div key={index} className="pwa-style">
+            <div className="chord-lyric-line text-only">
+              <span className="pwa-lyric">{line.text}</span>
+            </div>
+          </div>
+        );
+      }
+    }
+
+    // Legacy fallback for old format - check if chords are too close together (spacing issue)
+    if (line.type === 'lyric-legacy') {
+      const sortedChords = [...line.chords].sort((a, b) => a.position - b.position);
       const hasSpacingIssue = sortedChords.some((chord, index) => {
         if (index === sortedChords.length - 1) return false;
         const nextChord = sortedChords[index + 1];

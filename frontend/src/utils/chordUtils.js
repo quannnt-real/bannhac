@@ -39,7 +39,9 @@ export const parseLyrics = (lyricText) => {
     if (inlineMatch) {
       // Extract inline chords from backtick pattern
       const inlineChordsText = inlineMatch[0].slice(1, -1); // Remove backticks
-      const chordPattern = /\[\s*([A-G][#b]?(?:\/[A-G][#b]?)?(?:m|maj|min|dim|aug|sus[24]?|add[0-9]+|[0-9]+)*)\s*\]/g;
+      // FIXED: Moved slash part AFTER quality part to properly handle chords like D7/F#
+      // FIXED: Moved parentheses BEFORE slash part to handle chords like Am7(b5)/C
+      const chordPattern = /\[\s*([A-G][#b]?(?:(?:mMaj|maj|Maj|mmaj|mM|m(?!aj)|min|dim|aug|sus[24]?|add[0-9]+|M|alt|ø|o|\+|°|Δ|φ|\\|_|power|pow)[0-9]*(?:[#b][0-9]+)*|[0-9]+(?:[#b][0-9]+)*|[#b][0-9]+)*(?:\([^)]*\))?(?:\/[A-G][#b]?)?)\s*\]/g;
       const inlineChords = [];
       let match;
       
@@ -59,8 +61,11 @@ export const parseLyrics = (lyricText) => {
       return;
     }
     
-    // Parse chord lines - Enhanced pattern for complex chords with optional spaces
-    const chordPattern = /\[\s*([A-G][#b]?(?:\/[A-G][#b]?)?(?:m|maj|min|dim|aug|sus[24]?|add[0-9]+|[0-9]+)*)\s*\]/g;
+    // Parse chord lines - Ultra comprehensive pattern for ALL possible chord types
+    // Includes: Major, minor, 7th, maj7, mMaj7, sus, add, dim, aug, power chords, altered, etc.
+    // FIXED: Moved slash part AFTER quality part to properly handle chords like D7/F#
+    // FIXED: Moved parentheses BEFORE slash part to handle chords like Am7(b5)/C
+    const chordPattern = /\[\s*([A-G][#b]?(?:(?:mMaj|maj|Maj|mmaj|mM|m(?!aj)|min|dim|aug|sus[24]?|add[0-9]+|M|alt|ø|o|\+|°|Δ|φ|\\|_|power|pow)[0-9]*(?:[#b][0-9]+)*|[0-9]+(?:[#b][0-9]+)*|[#b][0-9]+)*(?:\([^)]*\))?(?:\/[A-G][#b]?)?)\s*\]/g;
     const chords = [];
     const textParts = [];
     let lastIndex = 0;
@@ -111,15 +116,24 @@ export const parseLyrics = (lyricText) => {
 // Enhanced transpose function to handle both major and minor chords
 export const transposeChord = (chord, fromKey, toKey) => {
   // Add safety checks
-  if (!chord || !fromKey || !toKey || typeof chord !== 'string') return chord;
+  if (!chord || !fromKey || !toKey || typeof chord !== 'string') {
+    return chord;
+  }
   if (fromKey === toKey) return chord;
   
   try {
-    // Extract root note and modifiers (m, 7, sus, etc.)
-    const chordMatch = chord.match(/^([A-G][#b]?(?:m|dim|aug)?)(.*)/);
-    if (!chordMatch) return chord;
+    // Ultra comprehensive pattern for ALL chord types - UPDATED to match parseLyrics pattern
+    // FIXED: Now handles 7alt, CMaj7, CmMaj7, slash chords, and parentheses correctly
+    const chordMatch = chord.match(/^([A-G][#b]?)((?:(?:mMaj|maj|Maj|mmaj|mM|m(?!aj)|min|dim|aug|sus[24]?|add[0-9]+|M|alt|ø|o|\+|°|Δ|φ|\\|_|power|pow)[0-9]*(?:[#b][0-9]+)*|[0-9]+(?:[#b][0-9]+)*|[#b][0-9]+)*)(\([^)]*\))?(\/[A-G][#b]?)?$/);
+    if (!chordMatch) {
+      return chord;
+    }
     
-    const [, baseChord, modifier] = chordMatch;
+    const [, rootNote, quality, parentheses, slashPart] = chordMatch;
+    const safeQuality = quality || ''; // Quality part (7, maj7, m7, etc.)
+    const safeParentheses = parentheses || ''; // Parentheses part ((b5), (#11), etc.)
+    const safeSlashPart = slashPart || ''; // Slash part (/F#, /C, etc.)
+    const modifier = safeQuality + safeParentheses + safeSlashPart; // Recombine all modifiers
     
     // Use the same chromatic order as getAvailableKeys (with flats)
     const chromaticKeys = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -175,12 +189,41 @@ export const transposeChord = (chord, fromKey, toKey) => {
       'A#m': ['A#', 'B#', 'C#', 'D#', 'E#', 'F#', 'G#']
     };
     
-    // Helper function to determine correct accidental based on target key
-    const getCorrectAccidental = (note, targetKey) => {
+    // Helper function to determine correct accidental based on target key AND original preference
+    const getCorrectAccidental = (note, targetKey, originalNote = null) => {
       const targetScale = keyScales[targetKey];
       if (!targetScale) return note;
       
-      // Check if the note (or its enharmonic equivalent) exists in the target scale
+      // ENHANCEMENT: Preserve original accidental preference when possible
+      if (originalNote) {
+        const originalIsSharp = originalNote.includes('#');
+        const originalIsFlat = originalNote.includes('b');
+        
+        // If original used sharps, prefer sharp equivalents
+        // If original used flats, prefer flat equivalents
+        const enharmonicEquivalents = {
+          'Db': 'C#', 'C#': 'Db',
+          'Eb': 'D#', 'D#': 'Eb', 
+          'Gb': 'F#', 'F#': 'Gb',
+          'Ab': 'G#', 'G#': 'Ab',
+          'Bb': 'A#', 'A#': 'Bb'
+        };
+        
+        // Try to maintain preference first
+        if (originalIsSharp && note.includes('b')) {
+          const sharpEquiv = enharmonicEquivalents[note];
+          if (sharpEquiv && sharpEquiv.includes('#')) {
+            return sharpEquiv;
+          }
+        } else if (originalIsFlat && note.includes('#')) {
+          const flatEquiv = enharmonicEquivalents[note];
+          if (flatEquiv && flatEquiv.includes('b')) {
+            return flatEquiv;
+          }
+        }
+      }
+      
+      // Original logic: Check if the note (or its enharmonic equivalent) exists in the target scale
       const enharmonicEquivalents = {
         'Db': 'C#', 'C#': 'Db',
         'Eb': 'D#', 'D#': 'Eb', 
@@ -217,8 +260,8 @@ export const transposeChord = (chord, fromKey, toKey) => {
     let semitoneShift = toIndex - fromIndex;
     if (semitoneShift < 0) semitoneShift += 12;
     
-    // Helper function to transpose a single note
-    const transposeNote = (note) => {
+    // Helper function to transpose a single note with preference preservation
+    const transposeNote = (note, originalNote = null) => {
       const normalizedNote = normalizeKeyForLookup(note);
       const noteIndex = chromaticKeys.indexOf(normalizedNote);
       if (noteIndex === -1) return note;
@@ -226,49 +269,28 @@ export const transposeChord = (chord, fromKey, toKey) => {
       let newIndex = (noteIndex + semitoneShift) % 12;
       let transposedNote = chromaticKeys[newIndex];
       
-      // Apply correct accidental based on target key's scale
-      return getCorrectAccidental(transposedNote, toKey);
+      // Apply correct accidental based on target key's scale AND preserve original preference
+      return getCorrectAccidental(transposedNote, toKey, originalNote);
     };
     
-    // Determine if chord is minor, major, or other
+    // Determine chord type and transpose accordingly (order matters!)
     let transposedChord;
     
-    if (baseChord.endsWith('m') && !baseChord.endsWith('dim')) {
-      // Minor chord
-      const rootNote = baseChord.replace('m', '');
-      const newRoot = transposeNote(rootNote);
-      transposedChord = newRoot + 'm' + modifier;
-    } else if (baseChord.endsWith('dim')) {
-      // Diminished chord
-      const rootNote = baseChord.replace('dim', '');
-      const newRoot = transposeNote(rootNote);
-      transposedChord = newRoot + 'dim' + modifier;
-    } else if (baseChord.endsWith('aug')) {
-      // Augmented chord
-      const rootNote = baseChord.replace('aug', '');
-      const newRoot = transposeNote(rootNote);
-      transposedChord = newRoot + 'aug' + modifier;
-    } else {
-      // Major chord
-      const newRoot = transposeNote(baseChord);
-      transposedChord = newRoot + modifier;
-    }
+    // Transpose the root note (preserve original preference)
+    const newRoot = transposeNote(rootNote, rootNote);
     
-    // Handle slash chords (e.g., C/E -> C#/F)
-    const slashMatch = modifier.match(/^(.*)\/([A-G][#b]?)(.*)$/);
-    if (slashMatch) {
-      const beforeSlash = slashMatch[1];
-      const bassNote = slashMatch[2];
-      const afterBass = slashMatch[3];
-      
-      const newBassNote = transposeNote(bassNote);
-      const transposedRoot = transposedChord.replace(modifier, '');
-      transposedChord = transposedRoot + beforeSlash + '/' + newBassNote + afterBass;
+    // Reconstruct the chord with transposed root
+    transposedChord = newRoot + safeQuality + safeParentheses;
+    
+    // Handle slash chords separately (preserve bass note preference)
+    if (safeSlashPart) {
+      const bassNote = safeSlashPart.substring(1); // Remove the '/' to get bass note
+      const newBassNote = transposeNote(bassNote, bassNote);
+      transposedChord = transposedChord + '/' + newBassNote;
     }
     
     return transposedChord;
   } catch (error) {
-    console.warn('Error transposing chord:', error);
     return chord; // Return original chord if error occurs
   }
 };

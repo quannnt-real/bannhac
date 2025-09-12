@@ -21,7 +21,6 @@ export const storeKeys = (keys) => {
     
     return encodedKeys;
   } catch (error) {
-    console.error('Error storing keys:', error);
     return '';
   }
 };
@@ -38,7 +37,6 @@ export const retrieveKeys = (keysParam) => {
       const storedKeys = sessionStorage.getItem(storageKey);
       
       if (!storedKeys) {
-        console.warn('Keys not found in storage:', storageKey);
         return {};
       }
       
@@ -63,13 +61,11 @@ export const retrieveKeys = (keysParam) => {
     
     // Additional safety checks for valid JSON format
     if (!decoded || decoded.trim() === '') {
-      console.warn('Empty keys parameter');
       return {};
     }
     
     // Check if JSON is properly formed
     if (!decoded.startsWith('{') || !decoded.endsWith('}')) {
-      console.warn('Invalid JSON format for keys parameter:', decoded);
       // Try to fix common truncation issues
       let fixedJson = decoded;
       if (decoded.startsWith('{') && !decoded.endsWith('}')) {
@@ -77,25 +73,20 @@ export const retrieveKeys = (keysParam) => {
         if (decoded.endsWith('"') || decoded.match(/:"[^"]*$/)) {
           // Ends with incomplete value, close the string and object
           fixedJson = decoded + '"}';
-          console.warn('Attempting to fix truncated JSON (incomplete value):', fixedJson);
         } else if (decoded.match(/:\s*$/)) {
           // Ends with colon, likely missing value
           fixedJson = decoded + '""}';
-          console.warn('Attempting to fix truncated JSON (missing value):', fixedJson);
         } else {
           // General case: just close the object
           fixedJson = decoded + '}';
-          console.warn('Attempting to fix truncated JSON (general):', fixedJson);
         }
         
         try {
           const parsed = JSON.parse(fixedJson);
           if (parsed && typeof parsed === 'object') {
-            console.log('Successfully fixed truncated JSON:', parsed);
             return parsed;
           }
         } catch (fixError) {
-          console.warn('Failed to fix truncated JSON:', fixError);
           // Last resort: try to extract song IDs and provide default keys
           const songIdMatches = decoded.match(/"(\d+)":/g);
           if (songIdMatches) {
@@ -104,7 +95,6 @@ export const retrieveKeys = (keysParam) => {
               const songId = match.replace(/[":]/g, '');
               result[songId] = 'C'; // Default key
             });
-            console.log('Created fallback keys from truncated data:', result);
             return result;
           }
         }
@@ -115,27 +105,21 @@ export const retrieveKeys = (keysParam) => {
     const parsed = JSON.parse(decoded);
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch (error) {
-    console.error('Error retrieving keys:', error);
-    console.error('Raw keysParam was:', keysParam);
     return {};
   }
 };
 
 export const cleanupOldKeys = () => {
-  try {
-    // Clean up old storage keys (older than 1 hour)
-    const oneHourAgo = Date.now() - (60 * 60 * 1000);
-    
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const key = sessionStorage.key(i);
-      if (key && key.startsWith('songKeys_')) {
-        const timestamp = parseInt(key.split('_')[1]);
-        if (timestamp < oneHourAgo) {
-          sessionStorage.removeItem(key);
-        }
+  // Clean up old storage keys (older than 1 hour)
+  const oneHourAgo = Date.now() - (60 * 60 * 1000);
+  
+  for (let i = sessionStorage.length - 1; i >= 0; i--) {
+    const key = sessionStorage.key(i);
+    if (key && key.startsWith('songKeys_')) {
+      const timestamp = parseInt(key.split('_')[1]);
+      if (timestamp < oneHourAgo) {
+        sessionStorage.removeItem(key);
       }
     }
-  } catch (error) {
-    console.warn('Error cleaning up old keys:', error);
   }
 };

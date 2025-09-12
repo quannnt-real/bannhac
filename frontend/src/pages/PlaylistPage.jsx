@@ -9,6 +9,7 @@ import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import SongCard from '../components/SongCard';
 import SharePanel from '../components/SharePanel';
 import { storeKeys } from '../utils/keyStorage';
+import { offlineManager } from '../utils/offlineManager';
 
 const PlaylistPage = () => {
   // Set page title
@@ -23,6 +24,22 @@ const PlaylistPage = () => {
   const [shareUrl, setShareUrl] = useState('');
   const [currentShareUrl, setCurrentShareUrl] = useState('');
   const [displayDate, setDisplayDate] = useState(''); // Store formatted date for display
+
+  // Ensure favorites are fully loaded from IndexedDB
+  useEffect(() => {
+    const ensureFavoritesLoaded = async () => {
+      try {
+        if (favorites.length === 0) {
+          // Try to load from IndexedDB directly if App context is empty
+          await offlineManager.init();
+          const cachedFavorites = await offlineManager.getCachedFavorites();
+        }
+      } catch (error) {
+      }
+    };
+    
+    ensureFavoritesLoaded();
+  }, [favorites.length]);
 
   // Load ordered favorites from localStorage on mount or when favorites change
   useEffect(() => {
@@ -61,7 +78,6 @@ const PlaylistPage = () => {
         setOrderedFavorites(ordered);
         
       } catch (error) {
-        console.error('Error loading favorites order:', error);
         setOrderedFavorites([...favorites]);
       }
     } else {
@@ -88,7 +104,6 @@ const PlaylistPage = () => {
         setDisplayDate(formattedDate);
         
       } catch (error) {
-        console.error('Error parsing date parameter:', error);
         setDisplayDate('');
       }
     } else {
@@ -104,7 +119,6 @@ const PlaylistPage = () => {
         const parsedKeys = JSON.parse(savedKeys);
         setSongKeys(parsedKeys);
       } catch (error) {
-        console.error('Error loading saved song keys:', error);
         // Clear corrupted data
         localStorage.removeItem('playlist_song_keys');
       }
@@ -144,7 +158,6 @@ const PlaylistPage = () => {
     
     // Safety check
     if (currentIndex === -1) {
-      console.warn('Song not found in current playlist');
       return;
     }
     
@@ -155,7 +168,6 @@ const PlaylistPage = () => {
       
       navigate(`/song/${song.id}?playlist=${favoriteSongIds.join(',')}&index=${currentIndex}&from=favorites&keys=${encodedKeys}`);
     } catch (error) {
-      console.error('Error navigating to song:', error);
       // Fallback without keys
       navigate(`/song/${song.id}?playlist=${favoriteSongIds.join(',')}&index=${currentIndex}&from=favorites`);
     }
@@ -210,11 +222,7 @@ const PlaylistPage = () => {
   };
 
   const handleSharePlaylist = () => {
-    if (orderedFavorites.length === 0) {
-      alert('Danh sách Thờ phượng trống! Hãy thêm bài hát trước khi chia sẻ.');
-      return;
-    }
-
+    // Nút chia sẻ đã ẩn khi trống, không cần check thêm
     try {
       const songIds = orderedFavorites.map(song => song.id).join(',');
       
@@ -244,7 +252,7 @@ const PlaylistPage = () => {
             
             shareUrl += `&keys=${encodedKeys}`;
           } catch (error) {
-            console.warn('Error encoding keys, sharing without keys:', error);
+            // No keys, use default sharing
           }
         }
       }
@@ -254,14 +262,13 @@ const PlaylistPage = () => {
       setCurrentShareUrl(shareUrl);
       setShowSharePanel(true);
     } catch (error) {
-      console.error('Error preparing share:', error);
-      alert('Không thể chuẩn bị chia sẻ playlist. Vui lòng thử lại.');
+      alert('Không thể chuẩn bị chia sẻ DS Bài hát. Vui lòng thử lại.');
     }
   };
 
-  const handleShareUrlUpdate = (newUrl) => {
+  const handleShareUrlUpdate = useCallback((newUrl) => {
     setCurrentShareUrl(newUrl);
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">

@@ -62,12 +62,12 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, c
       <div className="w-full bg-white rounded-t-3xl shadow-2xl border-t border-blue-100 max-h-[80vh] overflow-y-auto">
         <Card className="border-0 shadow-none">
           <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <CardTitle className="flex items-center gap-2 text-xl text-gray-800">
                 <ArrowUpDown className="h-5 w-5 text-blue-500" />
                 Sắp xếp bài hát
               </CardTitle>
-              <Button onClick={onClose} variant="ghost" size="sm" className="p-2">
+              <Button onClick={onClose} variant="ghost" size="sm" className="p-2 mt-0 -mr-2">
                 <X className="h-5 w-5" />
               </Button>
             </div>
@@ -207,7 +207,17 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, c
                 {/* Active sorts display */}
                 {sortConfig.sorts.length > 0 && (
                   <div>
-                    <h3 className="font-semibold text-gray-700 mb-3">Sắp xếp hiện tại</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-gray-700">Sắp xếp hiện tại</h3>
+                      <Button
+                        onClick={() => onSortChange({ sorts: [] })}
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 border-red-300 hover:bg-red-50 h-8"
+                      >
+                        Xóa tất cả
+                      </Button>
+                    </div>
                     <div className="space-y-2">
                       {sortConfig.sorts.map((sort, index) => {
                         const fieldLabels = {
@@ -218,7 +228,7 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, c
                         };
                         return (
                           <div key={sort.field} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
-                            <div>
+                            <div className="flex-1">
                               <span className="font-medium text-gray-700">
                                 {index + 1}. {fieldLabels[sort.field]}
                               </span>
@@ -230,7 +240,7 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, c
                               onClick={() => removeSort(sort.field)}
                               variant="ghost"
                               size="sm"
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-2 flex-shrink-0"
                             >
                               <X className="h-4 w-4" />
                             </Button>

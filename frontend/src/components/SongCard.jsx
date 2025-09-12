@@ -17,23 +17,15 @@ const SongCard = React.memo(({
 }) => {
   // Validate required props
   if (!song) {
-    console.warn('SongCard: song prop is required');
     return null;
   }
 
   if (typeof song.id === 'undefined') {
-    console.warn('SongCard: song.id is required');
     return null;
-  }
-
-  // Validate function props when used
-  if (showKeyControls && !onKeyChange) {
-    console.warn('SongCard: onKeyChange is required when showKeyControls is true');
   }
 
   // Add safety checks for song object
   if (!song || !song.id) {
-    console.warn('SongCard: Invalid song object');
     return null;
   }
 
@@ -64,18 +56,13 @@ const SongCard = React.memo(({
     e.stopPropagation();
     
     if (!song?.id || !onKeyChange || !availableKeys) {
-      console.warn('SongCard: Missing required data for key transpose');
       return;
     }
     
-    try {
-      // Chuyển 1/2 cung (1 semitone)
-      const newKey = getNextKey(displayKey, availableKeys);
-      if (newKey && newKey !== displayKey) {
-        onKeyChange(song.id, newKey);
-      }
-    } catch (error) {
-      console.error('Error in handleKeyUp:', error);
+    // Chuyển 1/2 cung (1 semitone)
+    const newKey = getNextKey(displayKey, availableKeys);
+    if (newKey && newKey !== displayKey) {
+      onKeyChange(song.id, newKey);
     }
   }, [displayKey, availableKeys, onKeyChange, song?.id]);
 
@@ -83,18 +70,13 @@ const SongCard = React.memo(({
     e.stopPropagation();
     
     if (!song?.id || !onKeyChange || !availableKeys) {
-      console.warn('SongCard: Missing required data for key transpose');
       return;
     }
     
-    try {
-      // Chuyển 1/2 cung (1 semitone)
-      const newKey = getPrevKey(displayKey, availableKeys);
-      if (newKey && newKey !== displayKey) {
-        onKeyChange(song.id, newKey);
-      }
-    } catch (error) {
-      console.error('Error in handleKeyDown:', error);
+    // Chuyển 1/2 cung (1 semitone)
+    const newKey = getPrevKey(displayKey, availableKeys);
+    if (newKey && newKey !== displayKey) {
+      onKeyChange(song.id, newKey);
     }
   }, [displayKey, availableKeys, onKeyChange, song?.id]);
 
@@ -103,18 +85,13 @@ const SongCard = React.memo(({
     e.stopPropagation();
     
     if (!song?.id || !onKeyChange || !availableKeys) {
-      console.warn('SongCard: Missing required data for key transpose');
       return;
     }
     
-    try {
-      // Chuyển 1 cung (2 semitones)
-      const newKey = getNextWholeToneKey(displayKey, availableKeys);
-      if (newKey && newKey !== displayKey) {
-        onKeyChange(song.id, newKey);
-      }
-    } catch (error) {
-      console.error('Error in handleKeyUpWholeTone:', error);
+    // Chuyển 1 cung (2 semitones)
+    const newKey = getNextWholeToneKey(displayKey, availableKeys);
+    if (newKey && newKey !== displayKey) {
+      onKeyChange(song.id, newKey);
     }
   }, [displayKey, availableKeys, onKeyChange, song?.id]);
 
@@ -122,18 +99,13 @@ const SongCard = React.memo(({
     e.stopPropagation();
     
     if (!song?.id || !onKeyChange || !availableKeys) {
-      console.warn('SongCard: Missing required data for key transpose');
       return;
     }
     
-    try {
-      // Chuyển 1 cung (2 semitones)
-      const newKey = getPrevWholeToneKey(displayKey, availableKeys);
-      if (newKey && newKey !== displayKey) {
-        onKeyChange(song.id, newKey);
-      }
-    } catch (error) {
-      console.error('Error in handleKeyDownWholeTone:', error);
+    // Chuyển 1 cung (2 semitones)
+    const newKey = getPrevWholeToneKey(displayKey, availableKeys);
+    if (newKey && newKey !== displayKey) {
+      onKeyChange(song.id, newKey);
     }
   }, [displayKey, availableKeys, onKeyChange, song?.id]);
 
@@ -247,7 +219,6 @@ const SongCard = React.memo(({
     try {
       return new Date(song.created_date).toLocaleDateString('vi-VN');
     } catch (error) {
-      console.warn('Invalid date format:', song.created_date);
       return 'N/A';
     }
   }, [song?.created_date]);
