@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* iOS PWA Critical Fixes - Must be after Tailwind */
+html, body, #root {
+    background-color: #ffffff !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+@media (display-mode: standalone) {
+    html, body, #root {
+        height: 100vh !important;
+        height: -webkit-fill-available !important;
+        background-color: #ffffff !important;
+    }
+}
+
 body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
@@ -9,6 +25,7 @@ body {
         "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-color: #ffffff !important;
 }
 
 code {

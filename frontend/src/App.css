@@ -1,6 +1,29 @@
-/* App.css - Only keep used styles */
-/* Note: All .App-* classes were unused and removed */
-/* If you need these styles, restore from backup */
+/* App.css - iOS PWA fixes */
+
+/* CRITICAL: Prevent black screen on iOS PWA */
+html, body, #root {
+  background-color: #ffffff !important;
+  color: #000000;
+  margin: 0;
+  padding: 0;
+}
+
+/* Main App container */
+.App {
+  min-height: 100vh;
+  min-height: calc(var(--vh, 1vh) * 100);
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+/* iOS PWA safe area support */
+@media (display-mode: standalone) {
+  .App {
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
 
 /* Notification Topbar Styles */
 .notification-topbar {

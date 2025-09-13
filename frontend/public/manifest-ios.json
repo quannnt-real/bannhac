@@ -2,7 +2,7 @@
   "name": "Bản Nhạc - Bài Hát Thờ Phượng Offline",
   "short_name": "Bản Nhạc",
   "description": "Ứng dụng bài hát thờ phượng với hợp âm - Hoạt động offline",
-  "start_url": "/?utm_source=pwa",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#dc2626",

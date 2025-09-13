@@ -2,15 +2,15 @@
   "name": "Bản Nhạc - Bài Hát Thờ Phượng Offline",
   "short_name": "Bản Nhạc",
   "description": "Ứng dụng bài hát thờ phượng với hợp âm - Hoạt động offline",
-  "start_url": "/?utm_source=pwa",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#dc2626",
   "orientation": "portrait",
   "scope": "/",
-  "lang": "vi-VN",
+  "lang": "vi",
   "dir": "ltr",
-  "categories": ["music", "entertainment", "religion"],
+  "categories": ["music", "entertainment"],
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
@@ -49,32 +49,14 @@
       "purpose": "any"
     },
     {
-      "src": "/apple-touch-icon-114x114.png",
-      "sizes": "114x114",
+      "src": "/android-chrome-384x384.png",
+      "sizes": "384x384",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/apple-touch-icon-76x76.png",
-      "sizes": "76x76",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/apple-touch-icon-72x72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/apple-touch-icon-60x60.png",
-      "sizes": "60x60",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/apple-touch-icon-57x57.png",
-      "sizes": "57x57",
+      "src": "/android-chrome-256x256.png",
+      "sizes": "256x256",
       "type": "image/png",
       "purpose": "any"
     },
@@ -97,28 +79,30 @@
       "purpose": "any"
     },
     {
-      "src": "/favicon-48x48.png",
-      "sizes": "48x48",
+      "src": "/logo192.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/favicon-32x32.png",
-      "sizes": "32x32",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/favicon-16x16.png",
-      "sizes": "16x16",
+      "src": "/logo512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     }
   ],
+  "categories": [
+    "music",
+    "lifestyle",
+    "entertainment",
+    "religion"
+  ],
+  "lang": "vi-VN",
+  "dir": "ltr",
   "shortcuts": [
     {
       "name": "Trang chủ",
-      "short_name": "Home", 
+      "short_name": "Home",
       "description": "Về trang chủ",
       "url": "/",
       "icons": [
@@ -131,7 +115,7 @@
     {
       "name": "Yêu thích",
       "short_name": "Favorites",
-      "description": "Bài hát yêu thích", 
+      "description": "Bài hát yêu thích",
       "url": "/playlist",
       "icons": [
         {
@@ -143,9 +127,22 @@
   ],
   "prefer_related_applications": false,
   "related_applications": [],
-  "id": "/",
+  "protocol_handlers": [
+    {
+      "protocol": "web+myheart",
+      "url": "/playlist?songs=%s"
+    }
+  ],
   "capture_links": "existing-client-navigate",
   "launch_handler": {
-    "client_mode": ["navigate-existing", "auto"]
+    "client_mode": [
+      "navigate-existing",
+      "auto"
+    ]
+  },
+  "id": "/",
+  "handle_links": "preferred",
+  "edge_side_panel": {
+    "preferred_width": 400
   }
 }

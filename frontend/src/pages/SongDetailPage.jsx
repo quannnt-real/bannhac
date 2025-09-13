@@ -13,6 +13,8 @@ import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { useOffline } from '../contexts/OfflineContext';
 import { retrieveKeys, cleanupOldKeys, storeKeys } from '../utils/keyStorage';
 import '../components/LyricsDisplay.css';
+import YouTubePlayer from '../components/YouTubePlayer';
+
 
 const SongDetailPage = () => {
   const { id } = useParams();
@@ -88,24 +90,179 @@ const SongDetailPage = () => {
   // Set page title based on song
   usePageTitle(song ? createPageTitle(song.title) : createPageTitle('Chi tiết bài hát'));
 
-  // Extract YouTube video ID from URL
-  const getYouTubeVideoId = (url) => {
+  // Debug server configuration for YouTube embeds
+  const debugServerConfig = () => {
+    const hostname = window.location.hostname;
+    const isMobileDomain = hostname.startsWith('m.') || hostname.includes('mobile');
+    const config = {
+      protocol: window.location.protocol,
+      hostname: hostname,
+      origin: window.location.origin,
+      userAgent: navigator.userAgent,
+      referrer: document.referrer,
+      isMobileDomain: isMobileDomain,
+      isProduction: window.location.protocol === 'https:' && 
+                    !hostname.includes('localhost') && 
+                    !hostname.includes('127.0.0.1'),
+      embedStrategy: isMobileDomain ? 'nocookie-first' : 'standard-first',
+      commonIssues: isMobileDomain ? [
+        'Mobile subdomains often blocked by YouTube',
+        'Try opening in desktop browser',
+        'Some videos restrict mobile embeds'
+      ] : [
+        'Check CSP headers',
+        'Verify HTTPS certificate',
+        'Check X-Frame-Options'
+      ]
+    };
+    
+    console.log('YouTube Embed Debug Info:', config);
+    return config;
+  };
+
+  // Extract media information from various sources
+  const getMediaInfo = (url) => {
     if (!url) return null;
     
-    const patterns = [
+    const normalizedUrl = url.trim().toLowerCase();
+    
+    // YouTube patterns
+    const youtubePatterns = [
       /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
       /youtube\.com\/.*[?&]v=([^&\n?#]+)/
     ];
     
-    for (const pattern of patterns) {
+    for (const pattern of youtubePatterns) {
       const match = url.match(pattern);
-      if (match) return match[1];
+      if (match) {
+        // Determine the best embed URL based on environment
+        const hostname = window.location.hostname;
+        const isProduction = window.location.protocol === 'https:' && 
+                            !hostname.includes('localhost') && 
+                            !hostname.includes('127.0.0.1');
+        
+        // Check if it's a mobile subdomain (often has issues with YouTube embeds)
+        const isMobileDomain = hostname.startsWith('m.') || hostname.includes('mobile');
+        
+        // For mobile domains, prefer nocookie and add additional parameters
+        const baseParams = isMobileDomain 
+          ? 'enablejsapi=1&rel=0&modestbranding=1&playsinline=1&fs=1&controls=1'
+          : 'enablejsapi=1&rel=0&modestbranding=1&playsinline=1';
+        
+        const embedParams = isProduction 
+          ? baseParams + '&origin=' + encodeURIComponent(window.location.origin) + '&widget_referrer=' + encodeURIComponent(window.location.origin)
+          : baseParams;
+        
+        // For mobile domains, default to nocookie to avoid embed restrictions
+        const primaryDomain = isMobileDomain ? 'www.youtube-nocookie.com' : 'www.youtube.com';
+        const fallbackDomain = isMobileDomain ? 'www.youtube.com' : 'www.youtube-nocookie.com';
+        
+        return {
+          type: 'youtube',
+          id: match[1],
+          embedUrl: `https://${primaryDomain}/embed/${match[1]}?${embedParams}`,
+          nocookieUrl: `https://${fallbackDomain}/embed/${match[1]}?${embedParams}`,
+          thumbnailUrl: `https://img.youtube.com/vi/${match[1]}/maxresdefault.jpg`,
+          originalUrl: url,
+          isProduction,
+          isMobileDomain,
+          hostname,
+          // Alternative viewing methods
+          alternatives: {
+            watchUrl: `https://www.youtube.com/watch?v=${match[1]}`,
+            mobileUrl: `https://m.youtube.com/watch?v=${match[1]}`,
+            appUrl: `youtube://watch?v=${match[1]}`,
+            shortUrl: `https://youtu.be/${match[1]}`,
+            thumbnail: `https://img.youtube.com/vi/${match[1]}/maxresdefault.jpg`,
+            audioUrl: `https://www.youtube.com/watch?v=${match[1]}&t=0s`, // For audio focus
+          }
+        };
+      }
     }
+    
+    // Google Drive patterns
+    const drivePatterns = [
+      /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,
+      /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/
+    ];
+    
+    for (const pattern of drivePatterns) {
+      const match = url.match(pattern);
+      if (match) {
+        return {
+          type: 'google-drive',
+          id: match[1],
+          embedUrl: `https://drive.google.com/file/d/${match[1]}/preview`,
+          originalUrl: url
+        };
+      }
+    }
+    
+    // Direct video/audio file patterns
+    if (normalizedUrl.match(/\.(mp4|webm|ogg|avi|mov|wmv|flv|m4v)(\?.*)?$/)) {
+      return {
+        type: 'video',
+        embedUrl: url,
+        originalUrl: url
+      };
+    }
+    
+    if (normalizedUrl.match(/\.(mp3|wav|flac|aac|m4a|ogg|wma)(\?.*)?$/)) {
+      return {
+        type: 'audio',
+        embedUrl: url,
+        originalUrl: url
+      };
+    }
+    
+    // Other video hosting services
+    if (normalizedUrl.includes('vimeo.com')) {
+      const vimeoMatch = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
+      if (vimeoMatch) {
+        return {
+          type: 'vimeo',
+          id: vimeoMatch[1],
+          embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}`,
+          originalUrl: url
+        };
+      }
+    }
+    
+    // Facebook video
+    if (normalizedUrl.includes('facebook.com') && normalizedUrl.includes('video')) {
+      return {
+        type: 'facebook',
+        embedUrl: url,
+        originalUrl: url
+      };
+    }
+    
+    // Fallback for other URLs - treat as generic web content
+    if (normalizedUrl.startsWith('http')) {
+      return {
+        type: 'web',
+        embedUrl: url,
+        originalUrl: url
+      };
+    }
+    
     return null;
   };
 
-  const videoId = getYouTubeVideoId(song?.link_song);
-  const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}?enablejsapi=1` : null;
+  const mediaInfo = getMediaInfo(song?.link_song);
+  const embedUrl = mediaInfo?.embedUrl || null;
+
+  // Reset video player state when toggled
+  useEffect(() => {
+    if (showVideoPlayer) {
+      console.log('YouTube Alternative Player opened:', {
+        videoId: mediaInfo?.id,
+        domain: window.location.hostname,
+        isMobile: mediaInfo?.isMobileDomain,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [showVideoPlayer, mediaInfo]);
 
   useEffect(() => {
     // Force clear all states when ID changes to prevent DOM reuse issues
@@ -1048,7 +1205,7 @@ const SongDetailPage = () => {
                 </div>
               )}
 
-              {/* Video Player Button */}
+              {/* Media Player Button */}
               {song?.link_song && (
                 <Button
                   onClick={() => {
@@ -1061,8 +1218,23 @@ const SongDetailPage = () => {
                   variant="ghost"
                   size="sm"
                   className={`h-8 w-8 p-0 ${showVideoPlayer ? 'text-red-600 hover:text-red-700' : 'text-gray-400 hover:text-red-500'}`}
+                  title={
+                    isOffline 
+                      ? 'Không thể phát media khi offline' 
+                      : mediaInfo?.type === 'youtube'
+                        ? 'Xem video hướng dẫn (YouTube)'
+                        : mediaInfo?.type === 'audio' 
+                          ? 'Phát audio hướng dẫn'
+                          : 'Phát video hướng dẫn'
+                  }
                 >
-                  <Play className="h-4 w-4" />
+                  {mediaInfo?.type === 'audio' ? (
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M9 12h.01M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
                 </Button>
               )}
             </div>
@@ -1071,12 +1243,22 @@ const SongDetailPage = () => {
       </header>
 
       {/* Compact Video Player Panel */}
-      {showVideoPlayer && song?.link_song && embedUrl && (
+      {showVideoPlayer && song?.link_song && (
         <div className="bg-black border-b border-gray-200 sticky top-[60px] z-30 flex justify-center">
           <div className="w-full max-w-[600px] px-4 py-3">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-white text-sm font-medium truncate flex-1 mr-3">
-                {song.title} - Video hướng dẫn
+                {song.title} - {mediaInfo?.type === 'audio' ? 'Audio' : 'Video'} hướng dẫn
+                {mediaInfo?.type && (
+                  <span className="ml-2 text-xs text-gray-300 uppercase">
+                    ({mediaInfo.type === 'youtube' ? 'YouTube Player' : 
+                      mediaInfo.type === 'google-drive' ? 'Google Drive' : 
+                      mediaInfo.type === 'vimeo' ? 'Vimeo' :
+                      mediaInfo.type === 'audio' ? 'Audio' :
+                      mediaInfo.type === 'video' ? 'Video' :
+                      mediaInfo.type})
+                  </span>
+                )}
               </h3>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <Button
@@ -1084,11 +1266,19 @@ const SongDetailPage = () => {
                   variant="ghost"
                   size="sm"
                   className="h-7 w-7 p-0 text-white hover:bg-white/20"
-                  title="Mở trên YouTube"
+                  title={`Mở trong tab mới`}
                 >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                  </svg>
+                  {mediaInfo?.type === 'youtube' ? (
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                  ) : (
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="m18 13 6-6-6-6"/>
+                      <path d="M2 5h12"/>
+                      <path d="M2 19h12"/>
+                    </svg>
+                  )}
                 </Button>
                 <Button
                   onClick={() => setShowVideoPlayer(false)}
@@ -1100,15 +1290,99 @@ const SongDetailPage = () => {
                 </Button>
               </div>
             </div>
-            <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden shadow-lg">
-              <iframe
-                src={embedUrl}
-                title={`${song.title} - Video hướng dẫn`}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            </div>
+            
+            {/* Offline Warning */}
+            {isOffline ? (
+              <div className="bg-orange-900/80 border border-orange-700 rounded-lg p-4 text-center">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <svg className="h-5 w-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <span className="text-orange-300 font-medium">Đang ngoại tuyến</span>
+                </div>
+                <p className="text-orange-200 text-sm">
+                  Không thể tải nội dung media khi offline. Vui lòng kiểm tra kết nối internet và thử lại.
+                </p>
+                <Button
+                  onClick={() => window.open(song.link_song, '_blank')}
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 bg-orange-800 border-orange-600 text-orange-200 hover:bg-orange-700"
+                >
+                  Mở link gốc
+                </Button>
+              </div>
+            ) : (
+              <div className="relative bg-gray-900 rounded-lg overflow-hidden shadow-lg">
+                {/* Media Player based on type */}
+                {mediaInfo?.type === 'audio' ? (
+                  <div className="aspect-video flex items-center justify-center bg-gradient-to-br from-purple-900 to-blue-900">
+                    <audio 
+                      controls 
+                      className="w-full max-w-md"
+                      preload="metadata"
+                    >
+                      <source src={embedUrl} />
+                      Trình duyệt không hỗ trợ phát audio.
+                    </audio>
+                  </div>
+                ) : mediaInfo?.type === 'video' ? (
+                  <video 
+                    controls 
+                    className="w-full h-full"
+                    preload="metadata"
+                  >
+                    <source src={embedUrl} />
+                    Trình duyệt không hỗ trợ phát video.
+                  </video>
+                ) : embedUrl ? (
+                  <div className="aspect-video relative">
+                    {/* YouTube Direct Video Player */}
+                    {mediaInfo?.type === 'youtube' ? (
+                      <div className="w-full h-full bg-gray-900 relative rounded-lg overflow-hidden">
+                        {/* Using new YouTube Internal API Player */}
+                        <YouTubePlayer 
+                          videoId={mediaInfo.id}
+                          title={song.title}
+                          thumbnailUrl={mediaInfo.thumbnailUrl}
+                          alternatives={mediaInfo.alternatives}
+                          isMobileDomain={mediaInfo.isMobileDomain}
+                        />
+                      </div>
+                    ) : (
+                      // Other media types - keep iframe for non-YouTube
+                      <iframe
+                        src={embedUrl}
+                        title={`${song.title} - ${mediaInfo?.type === 'audio' ? 'Audio' : 'Video'} hướng dẫn`}
+                        className="w-full h-full border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="aspect-video flex items-center justify-center bg-gray-800 text-gray-300">
+                    <div className="text-center max-w-sm px-4">
+                      <svg className="h-12 w-12 mx-auto mb-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                      <p className="text-sm mb-2 font-medium">Định dạng link không được hỗ trợ</p>
+                      <p className="text-xs text-gray-400 mb-3">
+                        Chúng tôi hỗ trợ: YouTube, Google Drive, Vimeo, file MP4/MP3 trực tiếp
+                      </p>
+                      <Button
+                        onClick={() => window.open(song.link_song, '_blank')}
+                        variant="outline"
+                        size="sm"
+                        className="bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600"
+                      >
+                        Mở link gốc
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

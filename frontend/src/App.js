@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
+import './ios-pwa.css'; // iOS PWA specific styles
 import HomePage from './pages/HomePage';
 import SongDetailPage from './pages/SongDetailPage';
 import PlaylistPage from './pages/PlaylistPage';
@@ -9,6 +10,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { OfflineProvider, useOffline } from './contexts/OfflineContext';
 import { NotificationProvider } from './components/NotificationProvider';
 import { offlineManager } from './utils/offlineManager';
+import { initIOSPWA } from './utils/iosPWA'; // iOS PWA utilities
+import './utils/consoleFilter'; // Import console filter to reduce noise
 
 // Context for managing app state
 const AppContext = React.createContext();
@@ -39,6 +42,9 @@ const AppProvider = ({ children }) => {
 
   // Load favorites from localStorage and IndexedDB on mount
   useEffect(() => {
+    // Initialize iOS PWA features
+    initIOSPWA();
+    
     const loadFavorites = async () => {
       // Try localStorage first (for backwards compatibility)
       const savedFavorites = localStorage.getItem('songFavorites');

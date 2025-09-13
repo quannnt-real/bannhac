@@ -1,0 +1,93 @@
+/* iOS PWA Critical Fixes */
+
+/* Fix viewport height for iOS */
+:root {
+  --vh: 1vh;
+}
+
+/* Prevent black screen on iOS PWA */
+html {
+  height: 100%;
+  background-color: #ffffff;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #ffffff;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: calc(var(--vh, 1vh) * 100);
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+/* iOS PWA standalone mode */
+@media (display-mode: standalone) {
+  html, body, #root {
+    height: 100vh;
+    height: -webkit-fill-available;
+    background-color: #ffffff;
+  }
+  
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
+/* iOS safe area support */
+@supports (padding: max(0px)) {
+  .app-container {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+}
+
+/* iOS specific PWA styling */
+@media (display-mode: standalone) {
+  /* Hide any elements that shouldn't show in PWA mode */
+  .browser-only {
+    display: none !important;
+  }
+  
+  /* Ensure full height on iOS */
+  html, body, #root {
+    height: 100vh;
+    height: -webkit-fill-available;
+  }
+  
+  /* iOS PWA scroll behavior */
+  body {
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* iOS touch improvements */
+button, .clickable {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* iOS input fixes */
+input, textarea {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+}
+
+/* iOS PWA install prompt hide */
+@media (display-mode: standalone) {
+  .install-prompt {
+    display: none !important;
+  }
+}
