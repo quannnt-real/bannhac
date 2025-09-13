@@ -33,15 +33,14 @@ const NotificationTopbar = React.memo(({ notification, onClose }) => {
       case 'syncing':
         return <RefreshCw className="animate-spin" size={20} />;
       case 'sync_complete':
+      case 'success':
         return <CheckCircle size={20} />;
       case 'offline':
         return <WifiOff size={20} />;
       case 'online':
         return <Wifi size={20} />;
-      case 'downloading':
+      case 'info':
         return <Download size={20} />;
-      case 'latest_data':
-        return <CheckCircle size={20} />;
       case 'sync_update':
         return <RefreshCw size={20} />;
       default:
@@ -52,13 +51,11 @@ const NotificationTopbar = React.memo(({ notification, onClose }) => {
   const getNotificationColor = (type) => {
     switch (type) {
       case 'syncing':
-      case 'downloading':
-      case 'update':
       case 'info':
         return 'bg-blue-500'; // Tailwind blue
       case 'sync_complete':
       case 'online':
-      case 'latest_data':
+      case 'success':
       case 'sync_update': // Changed to green for successful updates
         return 'bg-green-500'; // Tailwind green
       case 'offline':
@@ -73,7 +70,7 @@ const NotificationTopbar = React.memo(({ notification, onClose }) => {
   return (
     <>
       <div 
-        className={`fixed top-0 left-0 right-0 z-[9999] transform transition-all duration-300 ease-in-out ${
+        className={`fixed top-0 left-0 right-0 z-[9999] transform transition-all duration-300 ease-in-out ios-safe-top ${
           isClosing ? '-translate-y-full opacity-0' : 'translate-y-0 opacity-100'
         }`}
         style={{ boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}

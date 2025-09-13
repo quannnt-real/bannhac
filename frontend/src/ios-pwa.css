@@ -48,6 +48,49 @@ body {
     padding-left: max(12px, env(safe-area-inset-left));
     padding-right: max(12px, env(safe-area-inset-right));
   }
+  
+  /* iOS notification topbar safe area - always applied */
+  .ios-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  /* Dynamic safe area - only when scrolled */
+  .ios-safe-top-dynamic {
+    transition: padding-top 0.3s ease;
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  /* No safe area when at top */
+  .ios-safe-top-dynamic.at-top {
+    padding-top: 0;
+  }
+  
+  .ios-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* iPhone specific notch handling */
+@media only screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3), /* iPhone X, XS */
+       only screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2), /* iPhone XR */
+       only screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3), /* iPhone XS Max */
+       only screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3), /* iPhone 12, 12 Pro */
+       only screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3), /* iPhone 12 Pro Max */
+       only screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3), /* iPhone 13 mini */
+       only screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3), /* iPhone 13, 13 Pro */
+       only screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) { /* iPhone 13 Pro Max */
+  
+  .ios-safe-top {
+    padding-top: 44px; /* Fallback for devices without env() support */
+  }
+  
+  .ios-safe-top-dynamic {
+    padding-top: 44px; /* Fallback for devices without env() support */
+  }
+  
+  .ios-safe-top-dynamic.at-top {
+    padding-top: 0; /* No safe area when at top */
+  }
 }
 
 /* iOS specific PWA styling */

@@ -2,14 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Badge } from './ui/badge';
-import { Progress } from './ui/progress';
-import { Database, Download, Trash2, Wifi, WifiOff, Settings } from 'lucide-react';
+import { Database, Download, Trash2, RefreshCw } from 'lucide-react';
 import { useOffline } from '../contexts/OfflineContext';
+import { useCacheManager } from './CacheManager';
 import DonateInfo from './DonateInfo';
 
 const OfflineManagerPanel = ({ onClose }) => {
-  const { isOnline, isOffline, connectionInfo, setSyncPreference, offlineManager, networkManager } = useOffline();
+  const { offlineManager, isOffline } = useOffline();
+  const { updateCache, clearAllCaches, preloadResources, loading } = useCacheManager();
   const [cacheStats, setCacheStats] = useState(null);
   const [syncing, setSyncing] = useState(false);
 
@@ -35,36 +35,97 @@ const OfflineManagerPanel = ({ onClose }) => {
     }));
     
     try {
+      // Step 1: Update static resources cache AND preload critical resources
+      console.log('[OfflineManagerPanel] Starting cache update and preload...');
+      
+      const [cacheResult, preloadResult] = await Promise.all([
+        updateCache(),
+        preloadResources()
+      ]);
+      
+      console.log('[OfflineManagerPanel] Cache update result:', cacheResult);
+      console.log('[OfflineManagerPanel] Preload result:', preloadResult);
+      
+      // Check if cache operations failed
+      if (cacheResult && !cacheResult.success) {
+        console.warn('[OfflineManagerPanel] Cache update failed:', cacheResult.error);
+      }
+      
+      if (preloadResult && !preloadResult.success) {
+        console.warn('[OfflineManagerPanel] Preload failed:', preloadResult.error);
+      }
+      
+      // Step 2: Sync data
       const result = await offlineManager.performSmartSync('manual');
       await loadCacheStats();
       
       // Notify sync complete
       window.dispatchEvent(new CustomEvent('syncNotification', {
-        detail: { type: 'sync_complete', syncResult: result }
+        detail: { 
+          type: 'sync_complete', 
+          syncResult: result 
+        }
       }));
+      
+      // Show success message with details
+      let successMessage = 'Cập nhật thành công!';
+      
+      if (preloadResult && preloadResult.cached && preloadResult.total) {
+        successMessage += ` Đã cache ${preloadResult.cached}/${preloadResult.total} tài nguyên.`;
+      }
+      
+      if (cacheResult && cacheResult.method === 'fallback') {
+        successMessage += ' (Chế độ fallback)';
+      }
+      
     } catch (error) {
-      alert('Có lỗi khi cập nhật. Vui lòng thử lại.');
+      console.error('[OfflineManagerPanel] Sync failed:', error);
+      
+      // More specific error message
+      let errorMessage = 'Có lỗi khi cập nhật. ';
+      
+      if (error.message?.includes('Service Worker')) {
+        errorMessage += 'Vui lòng tải lại trang và thử lại.';
+      } else if (error.message?.includes('Cache API not supported')) {
+        errorMessage += 'Trình duyệt không hỗ trợ cache offline (development mode).';
+      } else if (error.message?.includes('network')) {
+        errorMessage += 'Kiểm tra kết nối mạng và thử lại.';
+      } else {
+        errorMessage += 'Vui lòng thử lại sau.';
+      }
+      
+      alert(errorMessage);
     } finally {
       setSyncing(false);
     }
   };
 
   const handleClearAllData = async () => {
-    if (window.confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu offline? App sẽ tự động tải lại và đồng bộ dữ liệu mới.')) {
+    if (window.confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu và cache? App sẽ tự động tải lại với dữ liệu mới nhất.')) {
       try {
-        // Clear everything: IndexedDB, Cache Storage, Service Worker
+        // Show clearing notification
+        window.dispatchEvent(new CustomEvent('syncNotification', {
+          detail: { type: 'clearing_data' }
+        }));
+
+        // Clear everything: IndexedDB + Cache Storage + Service Worker
+        const clearCacheResult = await clearAllCaches();
         await offlineManager.clearAllData();
         
-        // Clear Cache Storage
-        if ('caches' in window) {
-          const cacheNames = await caches.keys();
-          await Promise.all(cacheNames.map(name => caches.delete(name)));
-        }
+        console.log('[OfflineManagerPanel] Cache clear result:', clearCacheResult);
         
-        // Clear Service Worker
+        // Clear Service Worker registration
         if ('serviceWorker' in navigator) {
           const registrations = await navigator.serviceWorker.getRegistrations();
           await Promise.all(registrations.map(reg => reg.unregister()));
+        }
+        
+        // Clear all browser storage
+        if (window.localStorage) {
+          window.localStorage.clear();
+        }
+        if (window.sessionStorage) {
+          window.sessionStorage.clear();
         }
         
         // Notify data cleared
@@ -72,27 +133,28 @@ const OfflineManagerPanel = ({ onClose }) => {
           detail: { type: 'data_cleared' }
         }));
         
-        // Auto reload - no need to ask user to exit manually
-        window.location.reload();
+        // Force reload with cache busting
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('refresh', Date.now());
+        window.location.replace(currentUrl.toString());
       } catch (error) {
+        console.error('Error clearing data:', error);
+        
+        // Show specific error message
+        let errorMessage = 'Có lỗi khi xóa dữ liệu. ';
+        if (error.message?.includes('Cache API not supported')) {
+          errorMessage += 'Trình duyệt không hỗ trợ cache (development mode). Trang sẽ tự động tải lại.';
+        } else {
+          errorMessage += 'Trang sẽ tự động tải lại.';
+        }
+        
+        alert(errorMessage);
+        
+        // Fallback: simple reload
+        window.location.reload(true);
       }
     }
   };
-
-  const getConnectionStatus = () => {
-    if (isOnline) {
-      return { text: 'Đã kết nối', color: 'bg-green-500', icon: Wifi };
-    } else {
-      return { text: 'Offline', color: 'bg-red-500', icon: WifiOff };
-    }
-  };
-
-  const handleSyncPreferenceChange = (preference) => {
-    setSyncPreference(preference);
-  };
-
-  const connectionStatus = getConnectionStatus();
-  const ConnectionIcon = connectionStatus.icon;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -101,69 +163,12 @@ const OfflineManagerPanel = ({ onClose }) => {
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <Database size={20} />
-              Quản lý Offline
+              Cập nhật dữ liệu bài hát
             </span>
             <Button variant="ghost" size="sm" onClick={onClose}>×</Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Connection Status */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-            <div className="flex items-center gap-2">
-              <ConnectionIcon size={16} />
-              <span className="font-medium">Trạng thái kết nối</span>
-            </div>
-            <div className="text-right">
-              <Badge className={connectionStatus.color}>
-                {connectionStatus.text}
-              </Badge>
-              {connectionInfo && (
-                <div className="text-xs text-gray-500 mt-1">
-                  {connectionInfo.connectionName}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Sync Preferences */}
-          <div className="space-y-3">
-            <h4 className="font-medium flex items-center gap-2">
-              <Settings size={16} />
-              Cài đặt đồng bộ
-            </h4>
-            <div className="space-y-2">
-              <label className="flex items-center space-x-3">
-                <input
-                  type="radio"
-                  name="syncPreference"
-                  value="always"
-                  checked={connectionInfo?.syncPreference === 'always'}
-                  onChange={(e) => handleSyncPreferenceChange(e.target.value)}
-                  className="text-blue-600"
-                />
-                <div>
-                  <div className="font-medium text-sm">Luôn đồng bộ</div>
-                  <div className="text-xs text-gray-600">Sync với WiFi và 4G/5G</div>
-                </div>
-              </label>
-              
-              <label className="flex items-center space-x-3">
-                <input
-                  type="radio"
-                  name="syncPreference"
-                  value="wifi-only"
-                  checked={connectionInfo?.syncPreference === 'wifi-only'}
-                  onChange={(e) => handleSyncPreferenceChange(e.target.value)}
-                  className="text-blue-600"
-                />
-                <div>
-                  <div className="font-medium text-sm">Chỉ khi có WiFi</div>
-                  <div className="text-xs text-gray-600">Tiết kiệm data 4G/5G</div>
-                </div>
-              </label>
-            </div>
-          </div>
-
           {/* Song Data Only */}
           {cacheStats && (
             <div className="space-y-3">
@@ -184,13 +189,11 @@ const OfflineManagerPanel = ({ onClose }) => {
           <div className="space-y-2 pt-2">
             <Button 
               onClick={handleSyncNow} 
-              disabled={syncing || isOffline || (connectionInfo?.syncPreference === 'wifi-only' && connectionInfo?.connectionType !== 'wifi')}
+              disabled={syncing || isOffline}
               className="w-full"
             >
-              {syncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}
-              {connectionInfo?.syncPreference === 'wifi-only' && connectionInfo?.connectionType !== 'wifi' && (
-                <span className="ml-2 text-xs opacity-75">(Cần WiFi)</span>
-              )}
+              <RefreshCw size={16} className={`mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Đang cập nhật...' : 'Cập nhật'}
             </Button>
 
             <Button 

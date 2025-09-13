@@ -62,6 +62,7 @@
   },
   "scripts": {
     "start": "craco start",
+    "start:https": "HTTPS=true craco start",
     "build": "craco build",
     "test": "craco test"
   },

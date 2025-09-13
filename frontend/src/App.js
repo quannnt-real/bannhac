@@ -11,6 +11,7 @@ import { OfflineProvider, useOffline } from './contexts/OfflineContext';
 import { NotificationProvider } from './components/NotificationProvider';
 import { offlineManager } from './utils/offlineManager';
 import { initIOSPWA } from './utils/iosPWA'; // iOS PWA utilities
+import backgroundPreloader from './utils/backgroundPreloader'; // Background resource preloader
 import './utils/consoleFilter'; // Import console filter to reduce noise
 
 // Context for managing app state

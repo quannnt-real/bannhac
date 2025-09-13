@@ -138,18 +138,14 @@ const SyncNotificationManager = () => {
       const { detail } = event;
       
       if (detail.type === 'sync_start') {
-        // Case 2: Manual sync started
-        // Only show syncing notification if needed
-        showSyncingNotification("Đang đồng bộ qua WiFi...");
+        showNotification('info', 'Đang cập nhật ứng dụng...', 60000);
       } else if (detail.type === 'sync_complete') {
         const { syncResult } = detail;
         
         if (syncResult.success) {
           if (syncResult.isFirstTime) {
-            // Don't show completion here - wait for lyrics sync
             hasShownInitialSync.current = true;
-          } else if (syncResult.newSongs > 0 || syncResult.updatedSongs > 0) {
-            // Thay đổi thông báo để phản ánh rằng đang tải lyrics
+            // Show syncing lyrics notification
             if (syncResult.newSongs > 0 && syncResult.updatedSongs > 0) {
               showSyncingNotification(`Đang tải ${syncResult.newSongs} bài mới và cập nhật ${syncResult.updatedSongs} bài...`);
             } else if (syncResult.newSongs > 0) {
@@ -158,40 +154,47 @@ const SyncNotificationManager = () => {
               showSyncingNotification(`Đang cập nhật ${syncResult.updatedSongs} bài hát...`);
             }
             
-            // Phát event để HomePage cập nhật dữ liệu và bắt đầu lyrics sync
             window.dispatchEvent(new CustomEvent('offlineSyncComplete', {
               detail: { 
                 newSongs: syncResult.newSongs, 
                 updatedSongs: syncResult.updatedSongs 
               }
             }));
-          } else if (syncResult.reason === 'data_updated') {
-            // Case 2: Manual sync with no new data - show "latest data" message
-            showNotification('latest_data', 'Đang sử dụng dữ liệu mới nhất');
+          } else if (syncResult.newSongs > 0 || syncResult.updatedSongs > 0) {
+            const newCount = syncResult.newSongs;
+            const updatedCount = syncResult.updatedSongs;
+            
+            if (newCount > 0 && updatedCount > 0) {
+              showNotification('success', `Đã cập nhật ${newCount} bài mới và ${updatedCount} bài hát`, 5000);
+            } else if (newCount > 0) {
+              showNotification('success', `Đã tải ${newCount} bài hát mới`, 5000);
+            } else if (updatedCount > 0) {
+              showNotification('success', `Đã cập nhật ${updatedCount} bài hát`, 5000);
+            }
+          } else {
+            showNotification('success', "Ứng dụng đã được cập nhật", 3000);
           }
         }
-      } else if (detail.type === 'lyrics_sync_complete') {
-        // Show completion notification after lyrics sync is done
-        if (detail.message) {
-          // Thông báo tùy chỉnh từ HomePage
-          showNotification('sync_complete', detail.message);
-        } else {
-          // Thông báo mặc định cho initial sync
-          const { totalSongs, syncedCount } = detail;
-          showSyncCompleteNotification(totalSongs, true);
-        }
+      } else if (detail.type === 'clearing_data') {
+        showNotification('info', 'Đang xóa dữ liệu...', 10000);
       } else if (detail.type === 'data_cleared') {
-        // Reset flags when data is cleared (Case 1b)
+        showNotification('success', 'Đã xóa toàn bộ dữ liệu. Đang tải lại...', 3000);
         hasShownInitialSync.current = false;
         appInitialized.current = false;
+      } else if (detail.type === 'lyrics_sync_complete') {
+        const { syncedCount, isFirstTime } = detail;
+        
+        if (isFirstTime && hasShownInitialSync.current) {
+          showNotification('success', `Hoàn tất đồng bộ ${syncedCount} bài hát`, 5000);
+          hasShownInitialSync.current = false;
+        } else if (!isFirstTime && syncedCount > 0) {
+          showNotification('success', `Đã tải lời ${syncedCount} bài hát`, 3000);
+        }
       }
     };
 
     window.addEventListener('syncNotification', handleManualSync);
-    
-    return () => {
-      window.removeEventListener('syncNotification', handleManualSync);
-    };
+    return () => window.removeEventListener('syncNotification', handleManualSync);
   }, [showSyncingNotification, showSyncCompleteNotification, showUpdateNotification, showNotification]);
 
   return null; // This component doesn't render anything

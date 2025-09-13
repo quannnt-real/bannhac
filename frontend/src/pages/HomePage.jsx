@@ -12,12 +12,16 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 // Import optimized hooks
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
+import { useScrollSafeArea } from '../hooks/useScrollSafeArea';
 import { API_ENDPOINTS, buildApiUrl, apiCall } from '../utils/apiConfig';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const HomePage = () => {
   // Set page title
   usePageTitle(createPageTitle('Danh sách bài hát'));
+  
+  // Dynamic safe area based on scroll
+  const shouldUseSafeArea = useScrollSafeArea(20);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -724,7 +728,7 @@ const HomePage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-blue-100 sticky top-0 z-40">
+      <header className={`bg-white/80 backdrop-blur-sm border-b border-blue-100 sticky top-0 z-40 ios-safe-top-dynamic ${!shouldUseSafeArea ? 'at-top' : ''}`}>
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -774,7 +778,7 @@ const HomePage = () => {
                 title="Đồng bộ dữ liệu WiFi/4G và offline"
               >
                 <RefreshCw className="h-4 w-4" />
-                <span className="hidden sm:inline">Đồng bộ</span>
+                <span className="hidden sm:inline">Cập nhật</span>
               </Button>
               
               <Button

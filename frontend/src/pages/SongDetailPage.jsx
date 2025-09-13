@@ -10,6 +10,7 @@ import { parseLyrics, transposeChord, getAvailableKeys } from '../utils/chordUti
 import { offlineManager } from '../utils/offlineManager';
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
+import { useScrollSafeArea } from '../hooks/useScrollSafeArea';
 import { useOffline } from '../contexts/OfflineContext';
 import { retrieveKeys, cleanupOldKeys, storeKeys } from '../utils/keyStorage';
 import '../components/LyricsDisplay.css';
@@ -22,6 +23,9 @@ const SongDetailPage = () => {
   const [searchParams] = useSearchParams();
   const { favorites, toggleFavorite, isFavorite } = useAppContext();
   const { isOffline } = useOffline();
+  
+  // Dynamic safe area based on scroll
+  const shouldUseSafeArea = useScrollSafeArea(20);
   
   // Playlist navigation states
   const playlistParam = searchParams.get('playlist');
@@ -1116,7 +1120,7 @@ const SongDetailPage = () => {
       )}
       
       {/* Header - Compact */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-blue-100 sticky top-0 z-40">
+      <header className={`bg-white/80 backdrop-blur-sm border-b border-blue-100 sticky top-0 z-40 ios-safe-top-dynamic ${!shouldUseSafeArea ? 'at-top' : ''}`}>
         <div className="container mx-auto px-4 py-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-1 min-w-0">
