@@ -315,27 +315,49 @@ const SongDetailPage = () => {
   useEffect(() => {
     const handleSyncComplete = async (event) => {
       try {
+        console.log('[SongDetailPage] Sync complete event received:', event.detail);
+        
         // Reload song details if this song might have been updated
         const currentSongId = parseInt(id);
         if (currentSongId) {
+          // Small delay to ensure data is fully synced
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
           // Refresh song detail from IndexedDB
           const updatedSongDetail = await offlineManager.getCachedSongDetail(currentSongId);
           
           if (updatedSongDetail && (updatedSongDetail.lyric || updatedSongDetail.lyrics) && 
               (updatedSongDetail.lyric?.trim() !== '' || updatedSongDetail.lyrics?.trim() !== '')) {
-            setSong(updatedSongDetail);
-            console.log(`Refreshed song detail for ID ${currentSongId} after sync`);
+            
+            // Check if data actually changed before updating
+            if (!song || 
+                song.lyric !== updatedSongDetail.lyric || 
+                song.lyrics !== updatedSongDetail.lyrics ||
+                song.updated_date !== updatedSongDetail.updated_date) {
+              
+              console.log('[SongDetailPage] Song data has changed, updating...', {
+                oldLyricLength: song?.lyric?.length || 0,
+                newLyricLength: updatedSongDetail.lyric?.length || 0,
+                oldUpdatedDate: song?.updated_date,
+                newUpdatedDate: updatedSongDetail.updated_date
+              });
+              
+              setSong(updatedSongDetail);
+              console.log(`[SongDetailPage] Refreshed song detail for ID ${currentSongId} after sync`);
+            } else {
+              console.log('[SongDetailPage] No changes detected in song data');
+            }
           } else {
             // Try basic song metadata if no detailed lyrics
             const basicSong = await offlineManager.getCachedSong(currentSongId);
             if (basicSong && (!song || basicSong.updated_date !== song.updated_date)) {
               setSong(basicSong);
-              console.log(`Refreshed basic song data for ID ${currentSongId} after sync`);
+              console.log(`[SongDetailPage] Refreshed basic song data for ID ${currentSongId} after sync`);
             }
           }
         }
       } catch (updateError) {
-        console.error('Error refreshing song after sync:', updateError);
+        console.error('[SongDetailPage] Error refreshing song after sync:', updateError);
       }
     };
 
@@ -344,7 +366,7 @@ const SongDetailPage = () => {
     return () => {
       window.removeEventListener('offlineSyncComplete', handleSyncComplete);
     };
-  }, [id, song]); // Include song to compare updated_date
+  }, [id, song?.lyric, song?.updated_date]); // More specific dependencies
 
   // Memoize để tránh re-render không cần thiết
   const memoizedPlaylistIds = useMemo(() => 
@@ -394,10 +416,14 @@ const SongDetailPage = () => {
 
   useEffect(() => {
     if (song?.lyric) {
+      console.log('[SongDetailPage] Parsing lyrics for song:', song.id, song.title);
       setParsedLyrics(parseLyrics(song.lyric));
       // Data is already cached in IndexedDB by offlineManager, no need for localStorage
+    } else {
+      // Clear parsed lyrics if no lyric data
+      setParsedLyrics([]);
     }
-  }, [song]);
+  }, [song?.lyric, song?.id]); // More specific dependencies
 
   // Separate useEffect for handling initial key setting (no currentKey dependency)
   useEffect(() => {
