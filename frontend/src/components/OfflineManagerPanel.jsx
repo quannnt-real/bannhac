@@ -67,6 +67,18 @@ const OfflineManagerPanel = ({ onClose }) => {
         }
       }));
       
+      // Only dispatch offlineSyncComplete if there are actual changes
+      // This prevents unnecessary reloads in HomePage and SongDetailPage
+      if (result.newSongs > 0 || result.updatedSongs > 0) {
+        window.dispatchEvent(new CustomEvent('offlineSyncComplete', {
+          detail: { 
+            newSongs: result.newSongs || 0, 
+            updatedSongs: result.updatedSongs || 0,
+            manualSync: true
+          }
+        }));
+      }
+      
       // Show success message with details
       let successMessage = 'Cập nhật thành công!';
       
