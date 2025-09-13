@@ -601,3 +601,74 @@
     }
   }
 }
+
+/* ===== COLUMN LAYOUT FOR DESKTOP/LANDSCAPE ===== */
+.lyrics-content.column-layout {
+  column-count: 2;
+  column-gap: 3rem;
+  column-fill: balance;
+  column-rule: 1px solid #e5e7eb;
+  padding: 0 1rem;
+  position: relative;
+}
+
+/* Visual indicator for column mode */
+.lyrics-content.column-layout::before {
+  content: "";
+  position: absolute;
+  top: -0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2rem;
+  height: 2px;
+  background: linear-gradient(to right, #3b82f6, #10b981);
+  border-radius: 1px;
+  opacity: 0.6;
+}
+
+/* Prevent breaking inside chord lines */
+.lyrics-content.column-layout .chord-lyric-line {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* Prevent breaking inside verse blocks */
+.lyrics-content.column-layout .verse-block {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin-bottom: 1.5rem;
+}
+
+/* Adjust spacing for column layout */
+.lyrics-content.column-layout .chord-lyric-line {
+  margin-bottom: 0.5rem;
+}
+
+.lyrics-content.column-layout .chord-lyric-line.empty-line {
+  margin-bottom: 0.75rem;
+}
+
+/* Responsive column behavior */
+@media (max-width: 1023px) {
+  .lyrics-content.column-layout {
+    column-count: 1;
+    column-rule: none;
+    padding: 0;
+  }
+  
+  .lyrics-content.column-layout::before {
+    display: none;
+  }
+}
+
+/* Fine-tune for very wide screens */
+@media (min-width: 1400px) {
+  .lyrics-content.column-layout {
+    column-gap: 4rem;
+  }
+}
+
+/* Prevent orphan chords at column breaks */
+.lyrics-content.column-layout .pwa-chord-inline {
+  break-inside: avoid;
+}

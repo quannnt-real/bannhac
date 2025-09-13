@@ -11,6 +11,7 @@ import { offlineManager } from '../utils/offlineManager';
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { useScrollSafeArea } from '../hooks/useScrollSafeArea';
+import { useLyricsLayout } from '../hooks/useLyricsLayout';
 import { useOffline } from '../contexts/OfflineContext';
 import { retrieveKeys, cleanupOldKeys, storeKeys } from '../utils/keyStorage';
 import '../components/LyricsDisplay.css';
@@ -26,6 +27,9 @@ const SongDetailPage = () => {
   
   // Dynamic safe area based on scroll
   const shouldUseSafeArea = useScrollSafeArea(20);
+  
+  // Lyrics column layout for desktop/landscape
+  const { shouldUseColumns, lyricsRef } = useLyricsLayout();
   
   // Playlist navigation states
   const playlistParam = searchParams.get('playlist');
@@ -753,6 +757,37 @@ const SongDetailPage = () => {
     }).sort();
   }, [parsedLyrics, song?.key_chord, currentKey]);
 
+  // Group lyrics into verses for better column layout
+  const groupLyricsIntoVerses = (lyrics) => {
+    const verses = [];
+    let currentVerse = [];
+    
+    lyrics.forEach((line, index) => {
+      if (line.type === 'section') {
+        // End current verse and start new one
+        if (currentVerse.length > 0) {
+          verses.push(currentVerse);
+          currentVerse = [];
+        }
+        currentVerse.push({ ...line, index });
+      } else if (line.type === 'empty' && currentVerse.length > 2) {
+        // End verse on empty line if verse has enough content
+        currentVerse.push({ ...line, index });
+        verses.push(currentVerse);
+        currentVerse = [];
+      } else {
+        currentVerse.push({ ...line, index });
+      }
+    });
+    
+    // Add remaining lines
+    if (currentVerse.length > 0) {
+      verses.push(currentVerse);
+    }
+    
+    return verses;
+  };
+
   const renderLyricLine = (line, index) => {
     if (line.type === 'section') {
       return (
@@ -1410,8 +1445,22 @@ const SongDetailPage = () => {
                   '--line-height': `${lyricFontSize + chordFontSize + 6}px`
                 }}
               >
-                <div key={`song-${id}`} className="leading-relaxed lyrics-content">
-                  {parsedLyrics.map((line, index) => renderLyricLine(line, index))}
+                <div 
+                  key={`song-${id}`} 
+                  ref={lyricsRef}
+                  className={`leading-relaxed lyrics-content ${shouldUseColumns ? 'column-layout' : ''}`}
+                >
+                  {shouldUseColumns ? (
+                    // Column layout: group into verses
+                    groupLyricsIntoVerses(parsedLyrics).map((verse, verseIndex) => (
+                      <div key={verseIndex} className="verse-block">
+                        {verse.map((line) => renderLyricLine(line, line.index))}
+                      </div>
+                    ))
+                  ) : (
+                    // Regular layout: render lines directly
+                    parsedLyrics.map((line, index) => renderLyricLine(line, index))
+                  )}
                 </div>
               </div>
               
