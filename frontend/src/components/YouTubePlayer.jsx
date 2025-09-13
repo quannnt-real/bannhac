@@ -17,7 +17,7 @@ const YouTubePlayer = ({ videoId, title, thumbnailUrl, alternatives }) => {
   const apiLoadedRef = useRef(false);
   const isInitializingRef = useRef(false);
 
-  const YOUTUBE_API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY || 'AIzaSyCOc-tSoOzpz-SbblG87cC3y1giohk87w8';
+  const YOUTUBE_API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
 
   // Load YouTube IFrame Player API
   useEffect(() => {
