@@ -55,15 +55,38 @@ const OfflineManagerPanel = ({ onClose }) => {
         console.warn('[OfflineManagerPanel] Preload failed:', preloadResult.error);
       }
       
-      // Step 2: Sync data
+      // Step 2: Sync data (metadata)
       const result = await offlineManager.performSmartSync('manual');
+      
+      // Step 3: If there are new or updated songs, sync lyrics immediately
+      let lyricsResult = null;
+      if (result.newSongs > 0 || result.updatedSongs > 0) {
+        console.log('[OfflineManagerPanel] Starting lyrics sync for updated songs...');
+        
+        // Get recently updated songs for lyrics sync
+        const allSongs = await offlineManager.getCachedSongs();
+        const recentlyUpdatedIds = allSongs
+          .sort((a, b) => new Date(b.updated_date) - new Date(a.updated_date))
+          .slice(0, result.newSongs + result.updatedSongs)
+          .map(song => song.id);
+
+        // Sync lyrics for updated songs
+        lyricsResult = await offlineManager.performFullLyricsSync(
+          null, // no progress callback needed here
+          recentlyUpdatedIds
+        );
+        
+        console.log('[OfflineManagerPanel] Lyrics sync result:', lyricsResult);
+      }
+      
       await loadCacheStats();
       
       // Notify sync complete
       window.dispatchEvent(new CustomEvent('syncNotification', {
         detail: { 
           type: 'sync_complete', 
-          syncResult: result 
+          syncResult: result,
+          lyricsResult: lyricsResult
         }
       }));
       
@@ -74,13 +97,24 @@ const OfflineManagerPanel = ({ onClose }) => {
           detail: { 
             newSongs: result.newSongs || 0, 
             updatedSongs: result.updatedSongs || 0,
-            manualSync: true
+            manualSync: true,
+            lyricsAlreadySynced: true, // Flag để HomePage không sync lyrics lại
+            lyricsResult: lyricsResult
           }
         }));
       }
       
       // Show success message with details
       let successMessage = 'Cập nhật thành công!';
+      
+      // Add lyrics sync info to success message
+      if (result.newSongs > 0 && result.updatedSongs > 0) {
+        successMessage = `Đã tải ${result.newSongs} bài mới và cập nhật ${result.updatedSongs} bài hát (bao gồm lời)!`;
+      } else if (result.newSongs > 0) {
+        successMessage = `Đã tải ${result.newSongs} bài hát mới (bao gồm lời)!`;
+      } else if (result.updatedSongs > 0) {
+        successMessage = `Đã cập nhật ${result.updatedSongs} bài hát (bao gồm lời)!`;
+      }
       
       if (preloadResult && preloadResult.cached && preloadResult.total) {
         successMessage += ` Đã cache ${preloadResult.cached}/${preloadResult.total} tài nguyên.`;

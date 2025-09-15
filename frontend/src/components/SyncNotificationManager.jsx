@@ -140,7 +140,7 @@ const SyncNotificationManager = () => {
       if (detail.type === 'sync_start') {
         showNotification('info', 'Đang cập nhật ứng dụng...', 60000);
       } else if (detail.type === 'sync_complete') {
-        const { syncResult } = detail;
+        const { syncResult, lyricsResult } = detail;
         
         if (syncResult.success) {
           if (syncResult.isFirstTime) {
@@ -164,12 +164,16 @@ const SyncNotificationManager = () => {
             const newCount = syncResult.newSongs;
             const updatedCount = syncResult.updatedSongs;
             
+            // Check if lyrics were synced too
+            const hasLyrics = lyricsResult && lyricsResult.success && lyricsResult.syncedCount > 0;
+            const lyricsText = hasLyrics ? ' (bao gồm lời)' : '';
+            
             if (newCount > 0 && updatedCount > 0) {
-              showNotification('success', `Đã cập nhật ${newCount} bài mới và ${updatedCount} bài hát`, 5000);
+              showNotification('success', `Đã cập nhật ${newCount} bài mới và ${updatedCount} bài hát${lyricsText}`, 5000);
             } else if (newCount > 0) {
-              showNotification('success', `Đã tải ${newCount} bài hát mới`, 5000);
+              showNotification('success', `Đã tải ${newCount} bài hát mới${lyricsText}`, 5000);
             } else if (updatedCount > 0) {
-              showNotification('success', `Đã cập nhật ${updatedCount} bài hát`, 5000);
+              showNotification('success', `Đã cập nhật ${updatedCount} bài hát${lyricsText}`, 5000);
             }
           } else {
             showNotification('success', "Ứng dụng đã được cập nhật", 3000);

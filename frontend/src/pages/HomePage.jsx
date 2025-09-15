@@ -395,8 +395,8 @@ const HomePage = () => {
           // Clear any previous errors
           setError(null);
           
-          // Nếu có bài hát mới, sync lyrics cho chúng
-          if (detail && (detail.newSongs > 0 || detail.updatedSongs > 0)) {
+          // Nếu có bài hát mới, sync lyrics cho chúng (trừ khi đã sync trong manual sync)
+          if (detail && (detail.newSongs > 0 || detail.updatedSongs > 0) && !detail.lyricsAlreadySynced) {
             // Tạo danh sách các bài hát cần force refresh lyrics
             // Lấy tất cả bài hát có updated_date mới nhất để đảm bảo lyrics được cập nhật
             const recentlyUpdatedIds = updatedSongs
@@ -488,6 +488,32 @@ const HomePage = () => {
                 }));
               }
             });
+          } else if (detail && detail.lyricsAlreadySynced) {
+            // Lyrics đã được sync trong manual sync, chỉ hiển thị thông báo hoàn tất
+            console.log('Lyrics already synced in manual sync, skipping duplicate sync');
+            
+            if (detail.newSongs > 0 && detail.updatedSongs > 0) {
+              window.dispatchEvent(new CustomEvent('syncNotification', {
+                detail: { 
+                  type: 'lyrics_sync_complete', 
+                  message: `Hoàn tất: Thêm ${detail.newSongs} và cập nhật ${detail.updatedSongs} bài hát (đã bao gồm lời)`
+                }
+              }));
+            } else if (detail.newSongs > 0) {
+              window.dispatchEvent(new CustomEvent('syncNotification', {
+                detail: { 
+                  type: 'lyrics_sync_complete', 
+                  message: `Hoàn tất: Thêm ${detail.newSongs} bài hát mới (đã bao gồm lời)`
+                }
+              }));
+            } else if (detail.updatedSongs > 0) {
+              window.dispatchEvent(new CustomEvent('syncNotification', {
+                detail: { 
+                  type: 'lyrics_sync_complete', 
+                  message: `Hoàn tất: Cập nhật ${detail.updatedSongs} bài hát (đã bao gồm lời)`
+                }
+              }));
+            }
           }
         }
       } catch (updateError) {

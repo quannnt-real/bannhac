@@ -1,7 +1,7 @@
 {
-  "name": "Bản Nhạc - Bài Hát Thờ Phượng Offline",
-  "short_name": "Bản Nhạc",
-  "description": "Ứng dụng bài hát thờ phượng với hợp âm - Hoạt động offline",
+  "name": "My Heart Belong to Jesus - DS Bài Hát",
+  "short_name": "DS Bài Hát",
+  "description": "Ứng dụng bài hát thờ phượng với hợp âm, lời bài hát và danh sách phát.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

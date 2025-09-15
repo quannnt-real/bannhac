@@ -347,6 +347,7 @@ const SongDetailPage = () => {
               });
               
               setSong(updatedSongDetail);
+              setError(null); // Clear any previous errors about missing lyrics
               console.log(`[SongDetailPage] Refreshed song detail for ID ${currentSongId} after sync`);
             } else {
               console.log('[SongDetailPage] No changes detected in song data');
@@ -357,6 +358,11 @@ const SongDetailPage = () => {
             if (basicSong && (!song || basicSong.updated_date !== song.updated_date)) {
               setSong(basicSong);
               console.log(`[SongDetailPage] Refreshed basic song data for ID ${currentSongId} after sync`);
+              
+              // If this was a manual sync and lyrics are still missing, show appropriate message
+              if (event.detail?.manualSync && navigator.onLine) {
+                setError('Lời bài hát đang được tải. Vui lòng đợi trong giây lát...');
+              }
             }
           }
         }
