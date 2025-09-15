@@ -190,7 +190,7 @@ const HomePage = () => {
     };
   };
 
-  // Smart fetch function - chỉ tải dữ liệu đã có hoặc fallback
+  // Smart fetch function - ưu tiên cached data, chỉ báo lỗi khi thực sự cần thiết
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -201,26 +201,49 @@ const HomePage = () => {
       const cachedSongs = await offlineManager.getCachedSongs();
       
       if (cachedSongs.length > 0) {
-        // Có data → sử dụng ngay
+        // Có cached data → sử dụng ngay, không báo lỗi
         finalData = cachedSongs;
+        
+        // Nếu online, thực hiện background sync (không blocking UI)
+        if (navigator.onLine) {
+          offlineManager.performSmartSync('background').then(syncResult => {
+            if (syncResult.success && syncResult.syncedSongs > 0) {
+              // Refresh data nếu có updates
+              offlineManager.getCachedSongs().then(updatedSongs => {
+                if (updatedSongs.length > cachedSongs.length) {
+                  setSongs(updatedSongs);
+                  setAllSongs(updatedSongs);
+                  
+                  // Dispatch event for notification
+                  window.dispatchEvent(new CustomEvent('syncNotification', {
+                    detail: { 
+                      type: 'background_sync_complete', 
+                      newSongs: updatedSongs.length - cachedSongs.length
+                    }
+                  }));
+                }
+              });
+            }
+          }).catch(error => {
+            console.warn('Background sync failed:', error);
+          });
+        }
       } else {
-        // Không có data → cần tải từ đầu
+        // Không có cached data → cần tải từ đầu
         if (navigator.onLine) {
           const syncResult = await offlineManager.performSmartSync('initial');
           
           if (syncResult.success && syncResult.syncedSongs > 0) {
-            
             // Get cached songs after initial sync
             const newCachedSongs = await offlineManager.getCachedSongs();
             finalData = newCachedSongs;
             
             // Start lyrics sync in background if we have songs
             if (newCachedSongs.length > 0) {
-              
               // Start lyrics sync in background (don't wait)
               offlineManager.performFullLyricsSync((progress) => {
+                // Progress callback
               }).then(result => {
-                
                 // Dispatch event for notification system
                 if (result.success && result.totalSongs > 0) {
                   window.dispatchEvent(new CustomEvent('syncNotification', {
@@ -234,11 +257,11 @@ const HomePage = () => {
               });
             }
           } else {
-            setError('Không thể tải dữ liệu bài hát. Vui lòng thử lại.');
+            setError('Không thể tải dữ liệu bài hát từ server. Vui lòng thử lại.');
             return;
           }
         } else {
-          setError('Không thể tải dữ liệu bài hát. Vui lòng kết nối mạng và thử lại.');
+          setError('Chưa có dữ liệu cached và không có kết nối mạng. Vui lòng kết nối internet để tải dữ liệu lần đầu.');
           return;
         }
       }
@@ -279,16 +302,13 @@ const HomePage = () => {
         setTypes(uniqueTypes);
         setTopics(uniqueTopics);
         
-        // Data already cached by offlineManager, no need for localStorage
       } else {
-        setError('Không thể tải dữ liệu bài hát');
+        setError('Không có dữ liệu bài hát nào được tìm thấy.');
       }
 
-      // setIsOffline(false); // Managed by useOffline hook now
     } catch (error) {
-      
-      // IndexedDB-only strategy: No localStorage fallback
-      setError('Không thể tải dữ liệu. Vui lòng đồng bộ dữ liệu từ mạng trước.');
+      console.error('[HomePage] Error in fetchData:', error);
+      setError('Đã xảy ra lỗi khi tải dữ liệu. Vui lòng thử lại.');
       setSongs([]);
       setAllSongs([]);
       setTypes([]);

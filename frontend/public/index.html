@@ -57,13 +57,101 @@
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root">
-            <!-- Fallback content while app loads -->
-            <div style="display: flex; justify-content: center; align-items: center; height: 100vh; background: white; color: black;">
-                <div style="text-align: center;">
-                    <h2>Bản Nhạc</h2>
-                    <p>Đang tải ứng dụng...</p>
+            <!-- Enhanced fallback content while app loads -->
+            <div id="loading-fallback" style="display: flex; justify-content: center; align-items: center; height: 100vh; background: #f8fafc; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;">
+                <div style="text-align: center; max-width: 400px; padding: 2rem;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">🎵</div>
+                    <h2 style="margin: 0 0 1rem 0; font-size: 1.5rem; font-weight: 600; color: #dc2626;">Bản Nhạc</h2>
+                    <p id="loading-message" style="margin: 0 0 1.5rem 0; color: #64748b; line-height: 1.5;">Đang tải ứng dụng...</p>
+                    
+                    <!-- Loading animation -->
+                    <div style="display: inline-block; margin-bottom: 1rem;">
+                        <div style="width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top: 3px solid #dc2626; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    </div>
+                    
+                    <!-- Network status -->
+                    <div id="network-status" style="font-size: 0.875rem; color: #64748b; margin-bottom: 1rem;">
+                        <span id="status-text">Đang kiểm tra kết nối...</span>
+                    </div>
+                    
+                    <!-- Retry button (hidden initially) -->
+                    <button id="retry-btn" onclick="retryLoading()" style="display: none; background: #dc2626; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 0.5rem; cursor: pointer; font-size: 0.875rem; font-weight: 500;">
+                        Thử lại
+                    </button>
                 </div>
             </div>
+            
+            <style>
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                #retry-btn:hover {
+                    background: #b91c1c;
+                }
+            </style>
+            
+            <script>
+                let loadingTimeout;
+                let networkCheckInterval;
+                
+                function updateNetworkStatus() {
+                    const statusText = document.getElementById('status-text');
+                    const loadingMessage = document.getElementById('loading-message');
+                    const retryBtn = document.getElementById('retry-btn');
+                    
+                    if (navigator.onLine) {
+                        statusText.textContent = '🌐 Đã có mạng';
+                        statusText.style.color = '#059669';
+                    } else {
+                        statusText.textContent = '📱 Offline - Sử dụng dữ liệu cached';
+                        statusText.style.color = '#dc2626';
+                        loadingMessage.textContent = 'Đang tải từ bộ nhớ cache...';
+                    }
+                }
+                
+                function retryLoading() {
+                    window.location.reload();
+                }
+                
+                function showRetryButton() {
+                    const retryBtn = document.getElementById('retry-btn');
+                    const loadingMessage = document.getElementById('loading-message');
+                    
+                    loadingMessage.textContent = 'Ứng dụng tải chậm hơn bình thường';
+                    retryBtn.style.display = 'inline-block';
+                }
+                
+                // Initialize network status
+                updateNetworkStatus();
+                
+                // Listen for network changes
+                window.addEventListener('online', () => {
+                    updateNetworkStatus();
+                    clearTimeout(loadingTimeout);
+                });
+                
+                window.addEventListener('offline', updateNetworkStatus);
+                
+                // Show retry button after 10 seconds if app hasn't loaded
+                loadingTimeout = setTimeout(showRetryButton, 10000);
+                
+                // Check network status every 5 seconds
+                networkCheckInterval = setInterval(updateNetworkStatus, 5000);
+                
+                // Hide fallback when React app loads
+                window.addEventListener('DOMContentLoaded', () => {
+                    // This will be called when React app is ready
+                    setTimeout(() => {
+                        const fallback = document.getElementById('loading-fallback');
+                        if (fallback && document.querySelector('[data-reactroot], .App, #root > div')) {
+                            clearTimeout(loadingTimeout);
+                            clearInterval(networkCheckInterval);
+                            fallback.style.display = 'none';
+                        }
+                    }, 1000);
+                });
+            </script>
         </div>
         <!--
       This HTML file is a template.

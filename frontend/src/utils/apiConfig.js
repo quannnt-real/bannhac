@@ -37,13 +37,19 @@ export const buildApiUrl = (endpoint, params = {}) => {
 // Import offline manager
 import { offlineManager } from './offlineManager';
 
-// Fetch wrapper với offline support
+// Fetch wrapper với offline support và timeout
 export const apiCall = async (url, options = {}) => {
   const isOnline = navigator.onLine;
+  const timeout = options.timeout || 10000; // Default 10 seconds timeout
+  
+  // Create abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
   
   try {
     // Try online request first if online
     if (isOnline) {
+      
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -52,10 +58,14 @@ export const apiCall = async (url, options = {}) => {
         },
         mode: 'cors',
         credentials: 'omit',
+        signal: controller.signal,
         ...options
       });
       
+      clearTimeout(timeoutId);
+      
       if (!response.ok) {
+        console.warn(`[ApiConfig] HTTP error! status: ${response.status} for ${url}`);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
@@ -68,6 +78,8 @@ export const apiCall = async (url, options = {}) => {
       
       return data;
     } else {
+      clearTimeout(timeoutId);
+      
       // Offline - try to get cached data
       if (options.cacheKey) {
         const cachedData = await getCachedApiResponse(options.cacheKey);
@@ -78,6 +90,13 @@ export const apiCall = async (url, options = {}) => {
       throw new Error('No internet connection and no cached data available');
     }
   } catch (error) {
+    clearTimeout(timeoutId);
+    
+    // Handle abort error (timeout)
+    if (error.name === 'AbortError') {
+      error = new Error(`Request timeout after ${timeout}ms`);
+    }
+    
     // If online request fails, try cache as fallback
     if (isOnline && options.cacheKey) {
       const cachedData = await getCachedApiResponse(options.cacheKey);
@@ -85,6 +104,8 @@ export const apiCall = async (url, options = {}) => {
         return cachedData;
       }
     }
+    
+    console.error(`[ApiConfig] Request failed for ${url}:`, error);
     throw error;
   }
 };
