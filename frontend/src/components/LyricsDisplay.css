@@ -1,75 +1,33 @@
-/* Lyrics Display Styles */
 
-/* ===== PWA-STYLE CHORD DISPLAY ===== */
-/* Modern inline chord display - PWA chord layout logic */
+/* ===== NEW PWA-STYLE CHORD DISPLAY ===== */
 .lyrics-content .pwa-style .chord-lyric-line {
   position: relative;
   display: block;
-  margin-bottom: -1.5rem; /* Tăng spacing để tránh overlap giữa các dòng */
-  line-height: 3em; /* Tăng line-height để chỗ cho chord */
+  padding: 0;
+  margin: 0;
+  line-height: 49.5px;
   font-size: var(--lyric-font-size);
   color: #374151;
   font-weight: 500;
-  padding-top: 1.2em; /* Thêm padding-top để chord không bị cắt */
-  min-height: 2.5em; /* Đảm bảo có đủ không gian cho chord */
-  margin-top: -1.5rem; /* Giảm khoảng cách giữa các dòng */
 }
 
 .lyrics-content .pwa-style .chord-lyric-line.empty-line {
   line-height: 1.4em;
   height: 1.4em;
   min-height: 1.4em;
-  padding-top: 0;
 }
 
 .lyrics-content .pwa-style .chord-lyric-line.text-only {
-  margin-bottom: 1em;
-  line-height: 1.6em;
-  padding-top: 0.2em;
-  min-height: 1.6em;
+  line-height: 49.5px;
 }
 
+/* ===== GROUP 1: BASIC PWA CHORD STYLING (CURRENTLY ACTIVE) ===== */
 .lyrics-content .pwa-style .pwa-chord-inline {
   position: absolute;
   display: inline-block;
-  margin-top: -1.3em; /* Đặt chord ở trên text trong PWA style */
-  left: 0;
-  top: 0;
+  margin-top: -1.5em;
   z-index: 2;
-  pointer-events: none; /* Tránh ảnh hưởng đến click event của text */
-  line-height: 1em;
-}
-
-.lyrics-content .pwa-style .pwa-chord {
-  display: inline-block;
-  color: var(--chord-color);
-  background-color: var(--chord-bg);
-  border: 1px solid var(--chord-border);
-  font-size: var(--chord-font-size);
-  font-weight: bold;
-  padding: 2px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  line-height: 1;
-  white-space: nowrap;
-  margin-right: 12px; /* Tăng từ 8px lên 12px để tránh chồng chéo */
-  min-width: 32px; /* Tăng từ 24px lên 32px để đảm bảo chord có width tối thiểu */
-  padding-right: 4px; /* Thêm padding để tạo khoảng cách */
-}
-
-.lyrics-content .pwa-style .pwa-chord:hover {
-  text-decoration: underline;
-  opacity: 0.8;
-}
-
-.lyrics-content .pwa-style .pwa-lyric {
-  display: inline;
-  white-space: pre-wrap;
-  color: #374151;
-  font-weight: 500;
-  position: relative;
-  z-index: 1;
-  line-height: inherit;
+  pointer-events: none;
 }
 
 .lyrics-content .pwa-style .pwa-chord-inline i {
@@ -78,11 +36,123 @@
   width: 0;
   color: transparent;
   font-style: normal;
-  font-size: 0;
-  line-height: 0;
 }
 
-/* ===== ORIGINAL STYLES (preserved for backward compatibility) ===== */
+.lyrics-content .pwa-style .pwa-chord {
+  display: inline-block;
+  margin-right: 5px;
+  color: var(--chord-color);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: var(--chord-font-size);
+  min-width: fit-content; /* Ensure chord takes needed space */
+}
+
+.lyrics-content .pwa-style .pwa-chord span {
+  background-color: var(--chord-bg); /* Move background to span */
+  border: 1px solid var(--chord-border); /* Move border to span */
+  padding: 2px 6px; /* Move padding to span */
+  border-radius: 4px; /* Move border radius to span */
+  display: inline;
+}
+
+.lyrics-content .pwa-style .pwa-chord:hover {
+  text-decoration: underline;
+  opacity: 1; /* Remove opacity change */
+}
+
+.lyrics-content .pwa-style .pwa-lyric {
+  display: inline-block;
+  white-space: pre-wrap;
+  color: #374151;
+  font-weight: 500;
+  position: relative;
+  z-index: 1;
+  line-height: inherit;
+  min-width: 0; /* Allow shrinking when needed */
+}
+
+/* Ensure proper spacing for consecutive chords */
+.lyrics-content .pwa-style .pwa-lyric:empty {
+  min-width: 0; /* Remove min-width for empty spans to avoid text disruption */
+  display: inline-block;
+}
+
+/* ===== GROUP 2: CONSECUTIVE CHORD SPACING ===== */
+/* Add spacing between consecutive chord spans - BACKUP method */
+.lyrics-content .pwa-style .pwa-lyric:has(.pwa-chord-inline) + .pwa-lyric:has(.pwa-chord-inline) {
+  margin-left: 8px; /* Add margin between consecutive chord containers - fallback only */
+}
+
+/* Fallback for browsers that don't support :has() */
+.lyrics-content .pwa-style .pwa-lyric[style*="position: relative"] + .pwa-lyric[style*="position: relative"] {
+  margin-left: 8px;
+}
+
+/* Very specific selector for consecutive chords - ensure uniform spacing */
+div.pwa-style div.chord-lyric-line span.pwa-lyric.consecutive-chord {
+  margin-left: 0px !important; /* Remove margin-left */
+  padding-left: 0px !important; /* Remove padding */
+}
+
+/* New inline chord styling - match regular chord style */
+.pwa-inline-chord {
+  color: var(--chord-color, #dc2626) !important;
+  font-weight: 600 !important;
+  background-color: var(--chord-bg) !important;
+  border: 1px solid var(--chord-border) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: var(--chord-font-size) !important;
+  display: inline !important;
+}
+
+.pwa-inline-chord span {
+  color: var(--chord-color, #dc2626) !important;
+  font-weight: 600 !important;
+}
+
+/* Special handling for chords at end of line with no character */
+.lyrics-content .pwa-style .pwa-lyric:has(.pwa-chord-inline):empty::after {
+  content: '\00A0'; /* Add a non-breaking space for chords at end */
+  display: inline;
+  width: 0;
+  visibility: hidden;
+}
+
+/* Ensure text continuity */
+.lyrics-content .pwa-style .pwa-lyric {
+  display: inline-block;
+  white-space: pre-wrap; /* Preserve original text spacing */
+  color: #374151;
+  font-weight: 500;
+  position: relative;
+  z-index: 1;
+  line-height: inherit;
+  vertical-align: baseline; /* Ensure consistent baseline alignment */
+}
+
+/* Special styling for inline chord lines (from backticks) */
+.lyrics-content .pwa-style .chord-lyric-line .pwa-lyric {
+  white-space: nowrap; /* Prevent breaking of chord sequences */
+}
+
+/* Add natural word spacing for chord-lyric lines */
+.lyrics-content .pwa-style .chord-lyric-line {
+  word-spacing: normal;
+  white-space: pre-wrap;
+}
+
+/* Ensure proper spacing between elements */
+.lyrics-content .pwa-style .chord-lyric-line .pwa-lyric {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+/* ===== BACKWARD COMPATIBILITY STYLES ===== */
+/* Keep existing styles for other display modes */
+
+/* Inline Chords Container */
 .lyrics-content .lyric-container {
   line-height: var(--line-height);
   /* Flexbox with iOS compatibility */
@@ -449,6 +519,24 @@
   .lyrics-content .lyric-word,
   .lyrics-content .lyric-word-no-chord {
     font-size: calc(var(--lyric-font-size) * 0.95);
+  }
+
+  /* PWA mobile styles */
+  .lyrics-content .pwa-style .chord-lyric-line {
+    line-height: 39.6px; /* Reduce line-height on mobile (80% of 49.5px) */
+  }
+  
+  .lyrics-content .pwa-style .chord-lyric-line.text-only {
+    line-height: 39.6px;
+  }
+  
+  .lyrics-content .pwa-style .pwa-chord-inline {
+    margin-top: -1.2em; /* Adjust for smaller line-height */
+  }
+  
+  .lyrics-content .pwa-style .pwa-chord {
+    margin-right: 4px; /* Slightly reduce margin on mobile */
+    font-size: calc(var(--chord-font-size) * 0.9); /* Reduce chord font size on mobile */
   }
 
   /* Inline chords mobile styles with iOS fixes */

@@ -860,20 +860,58 @@ const SongDetailPage = () => {
         });
       };
 
+      // For inline chords, we need to reconstruct the original text
+      // The parser removed backticks and separated text from inline chords
+      let displayText = '';
+      
+      if (line.text && line.inlineChordText) {
+        // Reconstruct: find where the backticks were and put inline chords back
+        // If text has pattern like "Intro:  (x2)", insert inline chords in the middle
+        const textParts = line.text.split(/\s{2,}/); // Split on multiple spaces
+        if (textParts.length >= 2) {
+          displayText = `${textParts[0]} ${line.inlineChordText} ${textParts.slice(1).join(' ')}`;
+        } else {
+          displayText = `${line.text} ${line.inlineChordText}`;
+        }
+      } else if (line.inlineChordText) {
+        displayText = line.inlineChordText;
+      } else {
+        displayText = line.text || '';
+      }
+      
+      console.log('Original text:', line.text);
+      console.log('Inline chord text:', line.inlineChordText);
+      console.log('Reconstructed display text:', displayText);
+      
+      // Simple regex to find and replace chord patterns
+      displayText = displayText.replace(/\[([^\]]+)\]/g, (match, chord) => {
+        // Apply transposition if needed
+        let transposedChord = chord;
+        if (song?.key_chord && currentKey !== song.key_chord) {
+          try {
+            transposedChord = transposeChord(chord, song.key_chord, currentKey);
+          } catch (error) {
+            transposedChord = chord;
+          }
+        }
+        
+        // Format chord with superscript
+        const formattedChord = transposedChord.replace(/([A-G])(#|b)/g, (match, note, accidental) => {
+          return `${note}<sup>${accidental}</sup>`;
+        });
+        
+        return `<span class="pwa-inline-chord">${formattedChord}</span>`;
+      });
+      
+      console.log('Final display text:', displayText);
+
       return (
-        <div key={index} className="mb-6 inline-chord-container">
-          {/* Render text with inline chords */}
-          <div className="lyric-text-with-inline-chords" style={{ fontSize: `${lyricFontSize}px` }}>
-            {/* Display text first */}
-            <span className="lyric-text-part">{line.text}</span>
-            {/* Display chords inline after text */}
-            <span className="inline-chords-part ml-4">
-              {transposedChords.map((chord, idx) => (
-                <span key={idx} className="inline-chord mr-2">
-                  <span dangerouslySetInnerHTML={{ __html: formatChord(chord) }}></span>
-                </span>
-              ))}
-            </span>
+        <div key={index} className="pwa-style">
+          <div className="chord-lyric-line">
+            <span 
+              className="pwa-lyric" 
+              dangerouslySetInnerHTML={{ __html: displayText }}
+            />
           </div>
         </div>
       );
@@ -900,43 +938,18 @@ const SongDetailPage = () => {
             : chordInfo.chord
         }));
 
-        // Create PWA-style display with inline chords
+        // Create hopamchuan-style display with inline chords
         const lineText = line.text;
         const lineElements = [];
         let lastPos = 0;
 
-        // Đảm bảo khoảng cách tối thiểu giữa các chord
-        const adjustedChords = [];
-        let lastAdjustedPos = 0;
-        
+        // Process each chord position
         transposedChords.forEach((chordInfo, index) => {
-          let adjustedPos = Math.max(chordInfo.position, lastAdjustedPos);
-          
-          // Đảm bảo khoảng cách tối thiểu 4 ký tự giữa các chord
-          if (index > 0) {
-            const minDistance = 4;
-            const previousChordLength = adjustedChords[index - 1].chord ? 
-              adjustedChords[index - 1].chord.length : 2;
-            const requiredPos = lastAdjustedPos + minDistance + previousChordLength;
-            adjustedPos = Math.max(adjustedPos, requiredPos);
-          }
-          
-          adjustedChords.push({
-            ...chordInfo,
-            position: adjustedPos
-          });
-          
-          lastAdjustedPos = adjustedPos;
-        });
-
-        // Process each chord position with adjusted positions
-        adjustedChords.forEach((chordInfo, index) => {
           const chordPos = chordInfo.position;
-          const originalPos = transposedChords[index].position;
           
-          // Add text before this chord (sử dụng vị trí gốc)
-          if (lastPos < originalPos) {
-            const textBefore = lineText.substring(lastPos, originalPos);
+          // Add text before this chord
+          if (lastPos < chordPos) {
+            const textBefore = lineText.substring(lastPos, chordPos);
             lineElements.push(
               <span key={`text-${index}`} className="pwa-lyric">
                 {textBefore}
@@ -944,30 +957,64 @@ const SongDetailPage = () => {
             );
           }
           
-          // Thêm khoảng trắng nếu chord bị đẩy xa hơn vị trí gốc
-          if (chordPos > originalPos) {
-            const extraSpaces = chordPos - originalPos;
-            lineElements.push(
-              <span key={`space-${index}`} className="pwa-lyric">
-                {' '.repeat(extraSpaces)}
-              </span>
-            );
+          // Get the character at chord position for inline display
+          const charAtPos = lineText[chordPos] || '';
+          
+          // Check if this is consecutive chord (no meaningful text between this and previous chord)
+          // Two cases: 1) same position, 2) only whitespace/empty between positions
+          let isConsecutiveChord = false;
+          let isPreviousToConsecutive = false;
+          if (index > 0) {
+            const textBetween = lineText.substring(lastPos, chordPos);
+            // Consider consecutive if no text or only whitespace between chords
+            isConsecutiveChord = textBetween.trim() === '';
           }
           
-          // Add chord inline at position
-          lineElements.push(
-            <span key={`pos-${index}`} className="pwa-lyric" style={{ position: 'relative' }}>
+          // Check if NEXT chord is consecutive to mark this as "previous-to-consecutive"
+          if (index < line.chords.length - 1) {
+            const nextChordPos = line.chords[index + 1].position;
+            const textToNext = lineText.substring(chordPos + 1, nextChordPos);
+            isPreviousToConsecutive = textToNext.trim() === '';
+          }
+          
+          // Calculate dynamic spacing based on chord length
+          const chordLength = chordInfo.chord.length;
+          let dynamicSpacing = 35; // Increase base spacing to account for border + padding
+          
+          if (isConsecutiveChord || isPreviousToConsecutive) {
+            // More generous spacing calculation for wider characters + border/padding
+            dynamicSpacing = Math.max(35, 25 + chordLength * 7); // 25px base + 7px per character
+          }
+          
+          // Always use the actual character from text (or empty if at end)
+          // Don't add artificial spacing that breaks words
+          const displayChar = charAtPos;
+          
+          // Add chord with character at position (hopamchuan structure)
+          const chordElement = (
+            <span 
+              key={`chord-${index}`} 
+              className={`pwa-lyric ${isConsecutiveChord ? 'consecutive-chord' : ''} ${isPreviousToConsecutive ? 'previous-to-consecutive' : ''}`}
+              style={{ 
+                position: 'relative',
+                marginRight: (isConsecutiveChord || isPreviousToConsecutive) ? `${dynamicSpacing}px` : undefined
+              }}
+            >
               <span className="pwa-chord-inline">
+                <i>[</i>
                 <span className="pwa-chord">
                   <span dangerouslySetInnerHTML={{ __html: formatChord(chordInfo.chord) }}></span>
                 </span>
+                <i>]</i>
               </span>
-              {/* Add a zero-width character at chord position */}
-              <i></i>
+              {displayChar}
             </span>
           );
           
-          lastPos = originalPos;
+          lineElements.push(chordElement);
+          
+          // Always advance by 1 if there's a character, or stay at same position if at end
+          lastPos = charAtPos ? chordPos + 1 : chordPos;
         });
 
         // Add remaining text after last chord
