@@ -4,6 +4,7 @@ import { X, Copy, Share2, Check, Calendar } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import DonateInfo from './DonateInfo';
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 
 const QRCodeWithLogo = ({ value, size = 200, logoSrc = "/Logo_app.png" }) => {
   const canvasRef = useRef(null);
@@ -69,8 +70,8 @@ const QRCodeWithLogo = ({ value, size = 200, logoSrc = "/Logo_app.png" }) => {
 };
 
 const SharePanel = ({ isOpen, onClose, shareUrl, title = "Chia sẻ Playlist", onUpdateShareUrl }) => {
-  const [copied, setCopied] = useState(false);
-  const [pwaCodeCopied, setPwaCodeCopied] = useState(false);
+  const { copied: urlCopied, copyToClipboard: copyUrl } = useCopyToClipboard();
+  const { copied: pwaCodeCopied, copyToClipboard: copyPwaCode } = useCopyToClipboard();
   const [selectedDate, setSelectedDate] = useState(() => {
     // Default to today's date
     const today = new Date();
@@ -173,40 +174,12 @@ const SharePanel = ({ isOpen, onClose, shareUrl, title = "Chia sẻ Playlist", o
     return title;
   };
 
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(currentShareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = currentShareUrl;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+  const handleCopyLink = () => {
+    copyUrl(currentShareUrl);
   };
 
-  const handleCopyPwaCode = async () => {
-    try {
-      await navigator.clipboard.writeText(pwaCode);
-      setPwaCodeCopied(true);
-      setTimeout(() => setPwaCodeCopied(false), 2000);
-    } catch (error) {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = pwaCode;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      setPwaCodeCopied(true);
-      setTimeout(() => setPwaCodeCopied(false), 2000);
-    }
+  const handleCopyPwaCode = () => {
+    copyPwaCode(pwaCode);
   };
 
   if (!isOpen) return null;
@@ -312,12 +285,12 @@ const SharePanel = ({ isOpen, onClose, shareUrl, title = "Chia sẻ Playlist", o
                     onClick={handleCopyLink}
                     size="sm"
                     className={`shrink-0 h-7 px-2 text-xs ${
-                      copied 
+                      urlCopied 
                         ? 'bg-green-500 hover:bg-green-600' 
                         : 'bg-blue-500 hover:bg-blue-600'
                     } text-white`}
                   >
-                    {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                    {urlCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                   </Button>
                 </div>
               </div>

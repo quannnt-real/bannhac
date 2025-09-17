@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Heart, Copy, Check } from 'lucide-react';
 import { Button } from './ui/button';
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 
 const DonateInfo = ({ variant = 'default', className = '' }) => {
-  const [copied, setCopied] = useState(false);
+  const { copied: infoBankCopied, copyToClipboard: copyInfoBank } = useCopyToClipboard();
   
   // Thông tin donate - có thể thay đổi theo nhu cầu
   const donateInfo = {
@@ -13,23 +14,11 @@ const DonateInfo = ({ variant = 'default', className = '' }) => {
     message: 'Ủng hộ dự án Hợp Âm Thánh Ca'
   };
 
-  const handleCopyAccountNumber = async () => {
-    try {
-      await navigator.clipboard.writeText(donateInfo.accountNumber);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      // Fallback cho các browser không hỗ trợ clipboard API
-      const textArea = document.createElement('textarea');
-      textArea.value = donateInfo.accountNumber;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
+
+  const handleCopyAccountNumber = () => {
+    copyInfoBank(donateInfo.accountNumber);
+  }
+
 
   // Variant compact cho SharePanel footer
   if (variant === 'compact') {
@@ -48,7 +37,7 @@ const DonateInfo = ({ variant = 'default', className = '' }) => {
             size="sm"
             className="h-4 w-4 p-0 hover:bg-gray-100"
           >
-            {copied ? (
+            {infoBankCopied ? (
               <Check className="h-2.5 w-2.5 text-green-500" />
             ) : (
               <Copy className="h-2.5 w-2.5 text-gray-400" />
@@ -89,7 +78,7 @@ const DonateInfo = ({ variant = 'default', className = '' }) => {
               className="h-5 w-5 p-0 hover:bg-white/50"
               title="Copy số tài khoản"
             >
-              {copied ? (
+              {infoBankCopied ? (
                 <Check className="h-3 w-3 text-green-500" />
               ) : (
                 <Copy className="h-3 w-3 text-gray-500" />
