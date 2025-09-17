@@ -13,7 +13,6 @@ import { Badge } from '../components/ui/badge';
 // Import optimized hooks
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import { useScrollSafeArea } from '../hooks/useScrollSafeArea';
-import { API_ENDPOINTS, buildApiUrl, apiCall } from '../utils/apiConfig';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const HomePage = () => {
@@ -214,11 +213,11 @@ const HomePage = () => {
                   setSongs(updatedSongs);
                   setAllSongs(updatedSongs);
                   
-                  // Dispatch event for notification
-                  window.dispatchEvent(new CustomEvent('syncNotification', {
+                  // Dispatch event để trigger background lyrics sync
+                  window.dispatchEvent(new CustomEvent('offlineSyncComplete', {
                     detail: { 
-                      type: 'background_sync_complete', 
-                      newSongs: updatedSongs.length - cachedSongs.length
+                      newSongs: syncResult.newSongs || 0,
+                      updatedSongs: syncResult.updatedSongs || 0
                     }
                   }));
                 }
@@ -240,20 +239,34 @@ const HomePage = () => {
             
             // Start lyrics sync in background if we have songs
             if (newCachedSongs.length > 0) {
+              // Hiển thị thông báo đang tải lyrics ban đầu
+              window.dispatchEvent(new CustomEvent('syncNotification', {
+                detail: { 
+                  type: 'syncing', 
+                  message: `Đang tải lời ${newCachedSongs.length} bài hát...`
+                }
+              }));
+              
               // Start lyrics sync in background (don't wait)
               offlineManager.performFullLyricsSync((progress) => {
                 // Progress callback
               }).then(result => {
-                // Dispatch event for notification system
-                if (result.success && result.totalSongs > 0) {
+                // Chỉ hiển thị thông báo hoàn tất khi THỰC SỰ có lyrics được sync
+                if (result.success && result.syncedCount > 0) {
                   window.dispatchEvent(new CustomEvent('syncNotification', {
                     detail: { 
-                      type: 'lyrics_sync_complete', 
-                      totalSongs: result.totalSongs,
-                      syncedCount: result.syncedCount 
+                      type: 'homePageSuccess',
+                      newCount: newCachedSongs.length,
+                      updatedCount: 0,
+                      message: `Đã tải hoàn tất ${newCachedSongs.length} bài hát và lyrics`
                     }
                   }));
+                } else {
+                  console.warn('Initial lyrics sync failed or no lyrics downloaded:', result);
                 }
+              }).catch(error => {
+                console.error('Initial lyrics sync failed:', error);
+                // KHÔNG hiển thị thông báo hoàn tất khi sync thất bại
               });
             }
           } else {
@@ -397,6 +410,30 @@ const HomePage = () => {
           
           // Nếu có bài hát mới, sync lyrics cho chúng (trừ khi đã sync trong manual sync)
           if (detail && (detail.newSongs > 0 || detail.updatedSongs > 0) && !detail.lyricsAlreadySynced) {
+            // Hiển thị thông báo đang tải lyrics
+            if (detail.newSongs > 0 && detail.updatedSongs > 0) {
+              window.dispatchEvent(new CustomEvent('syncNotification', {
+                detail: { 
+                  type: 'syncing', 
+                  message: `Đang tải lời ${detail.newSongs} bài mới và ${detail.updatedSongs} bài cập nhật...`
+                }
+              }));
+            } else if (detail.newSongs > 0) {
+              window.dispatchEvent(new CustomEvent('syncNotification', {
+                detail: { 
+                  type: 'syncing', 
+                  message: `Đang tải lời ${detail.newSongs} bài hát mới...`
+                }
+              }));
+            } else if (detail.updatedSongs > 0) {
+              window.dispatchEvent(new CustomEvent('syncNotification', {
+                detail: { 
+                  type: 'syncing', 
+                  message: `Đang tải lời ${detail.updatedSongs} bài hát đã cập nhật...`
+                }
+              }));
+            }
+            
             // Tạo danh sách các bài hát cần force refresh lyrics
             // Lấy tất cả bài hát có updated_date mới nhất để đảm bảo lyrics được cập nhật
             const recentlyUpdatedIds = updatedSongs
@@ -411,106 +448,73 @@ const HomePage = () => {
               if (result.success && result.syncedCount > 0) {
                 console.log(`Đã sync lyrics cho ${result.syncedCount} bài hát mới`);
                 
-                // Hiển thị thông báo hoàn tất
+                // Chỉ hiển thị thông báo hoàn tất khi THỰC SỰ có lyrics được sync
                 if (detail.newSongs > 0 && detail.updatedSongs > 0) {
                   window.dispatchEvent(new CustomEvent('syncNotification', {
                     detail: { 
-                      type: 'lyrics_sync_complete', 
-                      message: `Hoàn tất: Thêm ${detail.newSongs} và cập nhật ${detail.updatedSongs} bài hát`
+                      type: 'sync_complete', 
+                      message: `Tìm thấy ${detail.newSongs + detail.updatedSongs} bài hát (${detail.newSongs} mới, ${detail.updatedSongs} cập nhật)`
                     }
                   }));
                 } else if (detail.newSongs > 0) {
                   window.dispatchEvent(new CustomEvent('syncNotification', {
                     detail: { 
-                      type: 'lyrics_sync_complete', 
-                      message: `Hoàn tất: Thêm ${detail.newSongs} bài hát mới`
+                      type: 'sync_complete', 
+                      message: `Tìm thấy ${detail.newSongs} bài hát mới`
                     }
                   }));
                 } else if (detail.updatedSongs > 0) {
                   window.dispatchEvent(new CustomEvent('syncNotification', {
                     detail: { 
-                      type: 'lyrics_sync_complete', 
-                      message: `Hoàn tất: Cập nhật ${detail.updatedSongs} bài hát`
+                      type: 'sync_complete', 
+                      message: `Tìm thấy ${detail.updatedSongs} bài hát đã cập nhật`
                     }
                   }));
                 }
               } else {
-                console.log('Lyrics sync completed but no new lyrics were downloaded');
+                console.log('Lyrics sync failed or no lyrics downloaded');
                 
-                // Vẫn hiển thị thông báo hoàn tất metadata
-                if (detail.newSongs > 0 && detail.updatedSongs > 0) {
-                  window.dispatchEvent(new CustomEvent('syncNotification', {
-                    detail: { 
-                      type: 'lyrics_sync_complete', 
-                      message: `Thêm ${detail.newSongs} và cập nhật ${detail.updatedSongs} bài hát`
-                    }
-                  }));
-                } else if (detail.newSongs > 0) {
-                  window.dispatchEvent(new CustomEvent('syncNotification', {
-                    detail: { 
-                      type: 'lyrics_sync_complete', 
-                      message: `Thêm ${detail.newSongs} bài hát mới`
-                    }
-                  }));
-                } else if (detail.updatedSongs > 0) {
-                  window.dispatchEvent(new CustomEvent('syncNotification', {
-                    detail: { 
-                      type: 'lyrics_sync_complete', 
-                      message: `Cập nhật ${detail.updatedSongs} bài hát`
-                    }
-                  }));
-                }
+                // KHÔNG hiển thị thông báo "Tìm thấy" khi lyrics sync thất bại
+                // Chỉ log để debug
+                console.warn('Metadata synced but lyrics sync failed:', {
+                  newSongs: detail.newSongs,
+                  updatedSongs: detail.updatedSongs,
+                  syncResult: result
+                });
               }
             }).catch(error => {
               console.error('Error syncing lyrics for new songs:', error);
               
-              // Vẫn hiển thị thông báo hoàn tất metadata ngay cả khi lyrics sync lỗi
-              if (detail.newSongs > 0 && detail.updatedSongs > 0) {
-                window.dispatchEvent(new CustomEvent('syncNotification', {
-                  detail: { 
-                    type: 'lyrics_sync_complete', 
-                    message: `Thêm ${detail.newSongs} và cập nhật ${detail.updatedSongs} bài hát`
-                  }
-                }));
-              } else if (detail.newSongs > 0) {
-                window.dispatchEvent(new CustomEvent('syncNotification', {
-                  detail: { 
-                    type: 'lyrics_sync_complete', 
-                    message: `Thêm ${detail.newSongs} bài hát mới`
-                  }
-                }));
-              } else if (detail.updatedSongs > 0) {
-                window.dispatchEvent(new CustomEvent('syncNotification', {
-                  detail: { 
-                    type: 'lyrics_sync_complete', 
-                    message: `Cập nhật ${detail.updatedSongs} bài hát`
-                  }
-                }));
-              }
+              // KHÔNG hiển thị thông báo "Tìm thấy" khi lyrics sync bị lỗi
+              console.warn('Lyrics sync failed completely:', {
+                newSongs: detail.newSongs,
+                updatedSongs: detail.updatedSongs,
+                error: error.message
+              });
             });
           } else if (detail && detail.lyricsAlreadySynced) {
-            // Lyrics đã được sync trong manual sync, chỉ hiển thị thông báo hoàn tất
-            console.log('Lyrics already synced in manual sync, skipping duplicate sync');
+            // Lyrics đã được sync trong manual sync, chỉ hiển thị thông báo hoàn tất với số lượng bài hát đã tìm thấy
+            console.log('Lyrics already synced in manual sync, showing completion notification');
             
             if (detail.newSongs > 0 && detail.updatedSongs > 0) {
               window.dispatchEvent(new CustomEvent('syncNotification', {
                 detail: { 
-                  type: 'lyrics_sync_complete', 
-                  message: `Hoàn tất: Thêm ${detail.newSongs} và cập nhật ${detail.updatedSongs} bài hát (đã bao gồm lời)`
+                  type: 'sync_complete', 
+                  message: `Tìm thấy ${detail.newSongs + detail.updatedSongs} bài hát (${detail.newSongs} mới, ${detail.updatedSongs} cập nhật)`
                 }
               }));
             } else if (detail.newSongs > 0) {
               window.dispatchEvent(new CustomEvent('syncNotification', {
                 detail: { 
-                  type: 'lyrics_sync_complete', 
-                  message: `Hoàn tất: Thêm ${detail.newSongs} bài hát mới (đã bao gồm lời)`
+                  type: 'sync_complete', 
+                  message: `Tìm thấy ${detail.newSongs} bài hát mới`
                 }
               }));
             } else if (detail.updatedSongs > 0) {
               window.dispatchEvent(new CustomEvent('syncNotification', {
                 detail: { 
-                  type: 'lyrics_sync_complete', 
-                  message: `Hoàn tất: Cập nhật ${detail.updatedSongs} bài hát (đã bao gồm lời)`
+                  type: 'sync_complete', 
+                  message: `Tìm thấy ${detail.updatedSongs} bài hát đã cập nhật`
                 }
               }));
             }

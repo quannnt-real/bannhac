@@ -18,58 +18,6 @@ class OfflineDatabase {
     this.lyricsSyncInProgress = false;
   }
 
-  // Dynamic batch size calculation based on connection and device
-  getDynamicBatchSize() {
-    // Get connection info from navigator
-    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    const connectionType = connection?.effectiveType || connection?.type || 'unknown';
-    
-    // Device performance estimation (rough)
-    const deviceMemory = navigator.deviceMemory || 4; // GB, default to 4GB
-    const hardwareConcurrency = navigator.hardwareConcurrency || 4; // CPU cores
-    
-    let batchSize = 10; // default
-    
-    // Adjust based on connection speed
-    switch (connectionType) {
-      case '4g':
-        batchSize = 50;
-        break;
-      case '3g':
-        batchSize = 20;
-        break;
-      case '2g':
-      case 'slow-2g':
-        batchSize = 5;
-        break;
-      case 'wifi':
-      case 'ethernet':
-        batchSize = 100;
-        break;
-      default:
-        // Unknown connection, be conservative but not too slow
-        batchSize = 30;
-    }
-    
-    // Adjust based on device capability
-    if (deviceMemory <= 2) {
-      batchSize = Math.min(batchSize, 20); // Low memory devices
-    } else if (deviceMemory >= 8) {
-      batchSize = Math.max(batchSize, 30); // High memory devices
-    }
-    
-    if (hardwareConcurrency <= 2) {
-      batchSize = Math.min(batchSize, 15); // Low-end CPU
-    } else if (hardwareConcurrency >= 8) {
-      batchSize = Math.max(batchSize, 40); // High-end CPU
-    }
-    
-    // Safety bounds
-    batchSize = Math.max(5, Math.min(100, batchSize));
-    
-    return batchSize;
-  }
-
   async init() {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.version);
@@ -315,6 +263,8 @@ class OfflineManager {
   // Songs management
   async cacheSongs(songs) {
     await this.ensureInitialized();
+    
+    // Use putMany for batch insert/update - more efficient than individual puts
     return await this.db.putMany(this.db.stores.songs, songs);
   }
 
@@ -364,18 +314,14 @@ class OfflineManager {
     return await this.db.get(this.db.stores.syncInfo, key);
   }
 
-  // Song Details management (with lyrics)
-  async cacheSongDetail(songDetail) {
+  async clearSyncInfo(key) {
     await this.ensureInitialized();
-    return await this.db.put(this.db.stores.songDetails, {
-      ...songDetail,
-      cached_at: Date.now()
-    });
+    return await this.db.delete(this.db.stores.syncInfo, key);
   }
 
-  async getCachedSongDetail(id) {
+  async deleteSongDetail(id) {
     await this.ensureInitialized();
-    return await this.db.get(this.db.stores.songDetails, id);
+    return await this.db.delete(this.db.stores.songDetails, id);
   }
 
   // Favorites management
@@ -413,100 +359,6 @@ class OfflineManager {
         data: { id: songId }
       });
     }
-  }
-
-  // Playlist management
-  async cachePlaylists(playlists) {
-    await this.ensureInitialized();
-    return await this.db.putMany(this.db.stores.playlists, playlists);
-  }
-
-  async getCachedPlaylists() {
-    await this.ensureInitialized();
-    return await this.db.getAll(this.db.stores.playlists);
-  }
-
-  async addPlaylistOffline(playlist) {
-    await this.ensureInitialized();
-    const playlistWithId = {
-      ...playlist,
-      id: playlist.id || Date.now().toString(),
-      created_at: new Date().toISOString(),
-      isOfflineCreated: true
-    };
-    
-    await this.db.put(this.db.stores.playlists, playlistWithId);
-    
-    // Add to sync queue if offline
-    if (!navigator.onLine) {
-      await this.db.addToSyncQueue({
-        operation: 'CREATE_PLAYLIST',
-        data: playlistWithId
-      });
-    }
-    
-    return playlistWithId;
-  }
-
-  async updatePlaylistOffline(playlist) {
-    await this.ensureInitialized();
-    const updatedPlaylist = {
-      ...playlist,
-      updated_at: new Date().toISOString()
-    };
-    
-    await this.db.put(this.db.stores.playlists, updatedPlaylist);
-    
-    // Add to sync queue if offline
-    if (!navigator.onLine) {
-      await this.db.addToSyncQueue({
-        operation: 'UPDATE_PLAYLIST',
-        data: updatedPlaylist
-      });
-    }
-    
-    return updatedPlaylist;
-  }
-
-  async deletePlaylistOffline(playlistId) {
-    await this.ensureInitialized();
-    await this.db.delete(this.db.stores.playlists, playlistId);
-    
-    // Add to sync queue if offline
-    if (!navigator.onLine) {
-      await this.db.addToSyncQueue({
-        operation: 'DELETE_PLAYLIST',
-        data: { id: playlistId }
-      });
-    }
-  }
-
-  // Image caching
-  async cacheImage(url) {
-    try {
-      await this.ensureInitialized();
-      
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch image');
-      
-      const blob = await response.blob();
-      const imageData = {
-        url,
-        blob,
-        cached_at: Date.now()
-      };
-      
-      await this.db.put(this.db.stores.images, imageData);
-      return blob;
-    } catch (error) {
-      return null;
-    }
-  }
-
-  async getCachedImage(url) {
-    await this.ensureInitialized();
-    const imageData = await this.db.get(this.db.stores.images, url);
-    return imageData ? imageData.blob : null;
   }
 
   // Sync functionality with network awareness
@@ -595,7 +447,9 @@ class OfflineManager {
       
       const syncCheck = await this.checkSyncNeeded();
       
-      if (!syncCheck.needed) {
+      // For manual sync, always proceed to ensure user gets latest data
+      // For auto sync, proceed only if needed
+      if (!syncCheck.needed && context !== 'manual') {
         return { success: true, reason: 'not_needed', ...syncCheck };
       }
       
@@ -610,8 +464,8 @@ class OfflineManager {
       const lastSyncInfo = await this.getSyncInfo('lastSync');
       const params = {};
       
-      // If we have previous sync, only get updated songs
-      if (lastSyncInfo && syncCheck.reason === 'data_updated' && !isFirstTime) {
+      // For automatic sync, use incremental sync if available
+      if (context !== 'manual' && lastSyncInfo && syncCheck.reason === 'data_updated' && !isFirstTime) {
         params.since = lastSyncInfo.lastUpdated;
       }
       
@@ -665,8 +519,48 @@ class OfflineManager {
           }
         }
         
-        // Cache songs (metadata)
-        await this.cacheSongs(songs);
+        // Cache songs intelligently - only update what changed
+        if (songs.length > 0) {
+          if (isFirstTime) {
+            // First time: cache all
+            await this.cacheSongs(songs);
+          } else {
+            // Incremental update: only cache changed songs
+            const cachedSongMap = new Map();
+            cachedSongs.forEach(song => {
+              cachedSongMap.set(song.id, song.updated_date);
+            });
+            
+            const songsToUpdate = [];
+            const songIdsToDelete = [];
+            
+            for (const song of songs) {
+              const cachedUpdatedDate = cachedSongMap.get(song.id);
+              
+              if (!cachedUpdatedDate || song.updated_date !== cachedUpdatedDate) {
+                // Song is new or updated - need to cache
+                songsToUpdate.push(song);
+                
+                // If it's an update (not new), mark for lyrics deletion
+                if (cachedUpdatedDate && song.updated_date !== cachedUpdatedDate) {
+                  songIdsToDelete.push(song.id);
+                }
+              }
+            }
+            
+            // Delete outdated lyrics before caching new data
+            if (songIdsToDelete.length > 0) {
+              await Promise.all(songIdsToDelete.map(id => 
+                this.db.delete(this.db.stores.songDetails, id)
+              ));
+            }
+            
+            // Cache only changed songs
+            if (songsToUpdate.length > 0) {
+              await this.cacheSongs(songsToUpdate);
+            }
+          }
+        }
       }
       
       // Update sync info
@@ -687,7 +581,9 @@ class OfflineManager {
         updatedSongs,
         isFirstTime,
         syncType: syncCheck.reason,
-        serverInfo: syncCheck.serverInfo
+        serverInfo: syncCheck.serverInfo,
+        reason: songs.length === 0 ? (context === 'manual' ? 'manual_completed' : 'no_changes') : 'sync_completed',
+        isManualSync: context === 'manual' // Flag to help notification logic
       };
       
     } catch (error) {
@@ -726,8 +622,8 @@ class OfflineManager {
       });
       
       // Filter songs that need lyrics (new songs or updated songs)
-      const songsNeedingLyrics = allSongs.filter(song => {
-        // Nếu có danh sách force refresh, ưu tiên check đó trước
+      let songsNeedingLyrics = allSongs.filter(song => {
+        // Nếu có danh sách force refresh, luôn check những bài đó
         if (forceRefreshIds && forceRefreshIds.includes(song.id)) {
           return true;
         }
@@ -739,7 +635,7 @@ class OfflineManager {
           return true;
         }
         
-        // Kiểm tra xem bài hát có được cập nhật không
+        // Kiểm tra xem bài hát có được cập nhật không dựa vào metadata
         if (song.updated_date && existingDetail.updated_date) {
           return song.updated_date !== existingDetail.updated_date;
         }
@@ -763,15 +659,27 @@ class OfflineManager {
         const batchIds = batch.map(s => s.id).join(',');
         
         try {
-          const syncUrl = buildApiUrl(API_ENDPOINTS.SONGS_SYNC, { 
+          const apiParams = { 
             ids: batchIds, 
-            full: 'true' 
-          });
+            full: 'true'
+          };
+          
+          // Only add force parameter if we're forcing refresh specific songs
+          if (forceRefreshIds && batch.some(song => forceRefreshIds.includes(song.id))) {
+            apiParams.force = Date.now(); // Cache busting only for forced songs
+          }
+          
+          const syncUrl = buildApiUrl(API_ENDPOINTS.SONGS_SYNC, apiParams);
           
           const syncResponse = await apiCall(syncUrl);
           
           if (syncResponse.success && syncResponse.data.length > 0) {
-            // Cache all song details from this batch
+            // Delete outdated lyrics before caching new data
+            await Promise.all(batch.map(song => 
+              this.db.delete(this.db.stores.songDetails, song.id)
+            ));
+            
+            // Cache new song details from this batch
             await this.cacheSongDetails(syncResponse.data);
             syncedCount += syncResponse.data.length;
             
@@ -818,6 +726,13 @@ class OfflineManager {
 
   async clearAllData() {
     await this.ensureInitialized();
+    console.log('[OfflineManager] Clearing all IndexedDB data...');
+    
+    // Check current data before clearing
+    const beforeSongs = await this.getCachedSongs();
+    const beforeDetails = await this.db.getAll(this.db.stores.songDetails);
+    console.log('[OfflineManager] Before clear - Songs:', beforeSongs.length, 'Details:', beforeDetails.length);
+    
     await Promise.all([
       this.db.clear(this.db.stores.songs),
       this.db.clear(this.db.stores.songDetails),
@@ -827,11 +742,17 @@ class OfflineManager {
       this.db.clear(this.db.stores.syncQueue),
       this.db.clear(this.db.stores.syncInfo)  // Also clear sync info
     ]);
-  }
-
-  async clearSyncInfo() {
-    await this.ensureInitialized();
-    await this.db.clear(this.db.stores.syncInfo);
+    
+    // Verify data is cleared
+    const afterSongs = await this.getCachedSongs();
+    const afterDetails = await this.db.getAll(this.db.stores.songDetails);
+    console.log('[OfflineManager] After clear - Songs:', afterSongs.length, 'Details:', afterDetails.length);
+    
+    if (afterSongs.length > 0 || afterDetails.length > 0) {
+      console.error('[OfflineManager] WARNING: Data not fully cleared!');
+    } else {
+      console.log('[OfflineManager] All IndexedDB data cleared successfully');
+    }
   }
 }
 

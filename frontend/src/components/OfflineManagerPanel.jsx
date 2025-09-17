@@ -9,7 +9,7 @@ import DonateInfo from './DonateInfo';
 
 const OfflineManagerPanel = ({ onClose }) => {
   const { offlineManager, isOffline } = useOffline();
-  const { updateCache, clearAllCaches, preloadResources, loading } = useCacheManager();
+  const { clearAllCaches, loading } = useCacheManager();
   const [cacheStats, setCacheStats] = useState(null);
   const [syncing, setSyncing] = useState(false);
 
@@ -35,51 +35,22 @@ const OfflineManagerPanel = ({ onClose }) => {
     }));
     
     try {
-      // Step 1: Update static resources cache AND preload critical resources
-      console.log('[OfflineManagerPanel] Starting cache update and preload...');
-      
-      const [cacheResult, preloadResult] = await Promise.all([
-        updateCache(),
-        preloadResources()
-      ]);
-      
-      console.log('[OfflineManagerPanel] Cache update result:', cacheResult);
-      console.log('[OfflineManagerPanel] Preload result:', preloadResult);
-      
-      // Check if cache operations failed
-      if (cacheResult && !cacheResult.success) {
-        console.warn('[OfflineManagerPanel] Cache update failed:', cacheResult.error);
-      }
-      
-      if (preloadResult && !preloadResult.success) {
-        console.warn('[OfflineManagerPanel] Preload failed:', preloadResult.error);
-      }
-      
-      // Step 2: Sync data (metadata)
+      // Step 1: Sync data (metadata)
       const result = await offlineManager.performSmartSync('manual');
       
-      // Step 3: If there are new or updated songs, sync lyrics immediately
+      // Step 2: Sync lyrics for songs that have updated_date changes
       let lyricsResult = null;
-      if (result.newSongs > 0 || result.updatedSongs > 0) {
-        console.log('[OfflineManagerPanel] Starting lyrics sync for updated songs...');
-        
-        // Get recently updated songs for lyrics sync
-        const allSongs = await offlineManager.getCachedSongs();
-        const recentlyUpdatedIds = allSongs
-          .sort((a, b) => new Date(b.updated_date) - new Date(a.updated_date))
-          .slice(0, result.newSongs + result.updatedSongs)
-          .map(song => song.id);
-
-        // Sync lyrics for updated songs
-        lyricsResult = await offlineManager.performFullLyricsSync(
-          null, // no progress callback needed here
-          recentlyUpdatedIds
-        );
-        
-        console.log('[OfflineManagerPanel] Lyrics sync result:', lyricsResult);
+      if (result && result.success) {
+        lyricsResult = await offlineManager.performFullLyricsSync();
       }
       
       await loadCacheStats();
+      
+      // Validate sync result before dispatching
+      if (!result) {
+        console.error('[OfflineManagerPanel] Sync result is undefined');
+        result = { success: false, error: 'Sync result is undefined' };
+      }
       
       // Notify sync complete
       window.dispatchEvent(new CustomEvent('syncNotification', {
@@ -92,7 +63,7 @@ const OfflineManagerPanel = ({ onClose }) => {
       
       // Only dispatch offlineSyncComplete if there are actual changes
       // This prevents unnecessary reloads in HomePage and SongDetailPage
-      if (result.newSongs > 0 || result.updatedSongs > 0) {
+      if (result && result.success && (result.newSongs > 0 || result.updatedSongs > 0)) {
         window.dispatchEvent(new CustomEvent('offlineSyncComplete', {
           detail: { 
             newSongs: result.newSongs || 0, 
@@ -102,26 +73,6 @@ const OfflineManagerPanel = ({ onClose }) => {
             lyricsResult: lyricsResult
           }
         }));
-      }
-      
-      // Show success message with details
-      let successMessage = 'Cập nhật thành công!';
-      
-      // Add lyrics sync info to success message
-      if (result.newSongs > 0 && result.updatedSongs > 0) {
-        successMessage = `Đã tải ${result.newSongs} bài mới và cập nhật ${result.updatedSongs} bài hát (bao gồm lời)!`;
-      } else if (result.newSongs > 0) {
-        successMessage = `Đã tải ${result.newSongs} bài hát mới (bao gồm lời)!`;
-      } else if (result.updatedSongs > 0) {
-        successMessage = `Đã cập nhật ${result.updatedSongs} bài hát (bao gồm lời)!`;
-      }
-      
-      if (preloadResult && preloadResult.cached && preloadResult.total) {
-        successMessage += ` Đã cache ${preloadResult.cached}/${preloadResult.total} tài nguyên.`;
-      }
-      
-      if (cacheResult && cacheResult.method === 'fallback') {
-        successMessage += ' (Chế độ fallback)';
       }
       
     } catch (error) {
@@ -179,7 +130,7 @@ const OfflineManagerPanel = ({ onClose }) => {
           detail: { type: 'data_cleared' }
         }));
         
-        // Force reload with cache busting
+        // Force reload with cache busting để tải toàn bộ về lại
         const currentUrl = new URL(window.location.href);
         currentUrl.searchParams.set('refresh', Date.now());
         window.location.replace(currentUrl.toString());
