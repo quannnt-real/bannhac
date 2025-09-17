@@ -77,6 +77,7 @@ const SongDetailPage = () => {
   };
   
   const [song, setSong] = useState(null);
+  const [error, setError] = useState(null); // Add error state
   const [playlistSongs, setPlaylistSongs] = useState([]);
   const [currentKey, setCurrentKey] = useState('C'); // Initialize with 'C' instead of empty string
   const [chordColor, setChordColor] = useState('#ef4444'); // Default red
@@ -124,7 +125,7 @@ const SongDetailPage = () => {
       ]
     };
     
-    console.log('YouTube Embed Debug Info:', config);
+    console.log('Thông tin debug YouTube Embed:', config);
     return config;
   };
 
@@ -263,7 +264,7 @@ const SongDetailPage = () => {
   // Reset video player state when toggled
   useEffect(() => {
     if (showVideoPlayer) {
-      console.log('YouTube Alternative Player opened:', {
+      console.log('Mở YouTube Player thay thế:', {
         videoId: mediaInfo?.id,
         domain: window.location.hostname,
         isMobile: mediaInfo?.isMobileDomain,
@@ -302,8 +303,37 @@ const SongDetailPage = () => {
         if (finalSongData) {
           setSong(finalSongData);
           setCurrentKey(finalSongData.key_chord || 'C');
+          
+          // Trigger background sync if online to check for updates
+          if (navigator.onLine) {
+            offlineManager.performSmartSync('background').then(syncResult => {
+              if (syncResult.success && (syncResult.newSongs > 0 || syncResult.updatedSongs > 0)) {
+                // Check if current song was updated
+                const currentSongId = parseInt(id);
+                offlineManager.getCachedSong(currentSongId).then(updatedSong => {
+                  if (updatedSong && updatedSong.updated_date !== finalSongData.updated_date) {
+                    // Song was updated, trigger lyrics sync for this specific song
+                    offlineManager.performFullLyricsSync(null, [currentSongId]).then(lyricsResult => {
+                      if (lyricsResult.success && lyricsResult.syncedCount > 0) {
+                        // Reload the updated song detail
+                        offlineManager.getCachedSongDetail(currentSongId).then(newSongDetail => {
+                          if (newSongDetail) {
+                            setSong(newSongDetail);
+                            setCurrentKey(newSongDetail.key_chord || 'C');
+                          }
+                        });
+                      }
+                    });
+                  }
+                });
+              }
+            }).catch(error => {
+              console.warn('Sync nền thất bại trong SongDetailPage:', error);
+            });
+          }
         } else {
-          setError('Không tìm thấy bài hát trong dữ liệu offline. Vui lòng đồng bộ dữ liệu trước.');
+          // Không có dữ liệu → hướng dẫn user về trang chủ, không set error
+          // setError('Không tìm thấy bài hát trong dữ liệu offline. Vui lòng đồng bộ dữ liệu trước.');
         }
       } catch (error) {
         setError('Lỗi khi tải dữ liệu bài hát từ IndexedDB.');
@@ -319,7 +349,7 @@ const SongDetailPage = () => {
   useEffect(() => {
     const handleSyncComplete = async (event) => {
       try {
-        console.log('[SongDetailPage] Sync complete event received:', event.detail);
+        console.log('[SongDetailPage] Nhận được sự kiện sync hoàn tất:', event.detail);
         
         // Reload song details if this song might have been updated
         const currentSongId = parseInt(id);
@@ -339,7 +369,7 @@ const SongDetailPage = () => {
                 song.lyrics !== updatedSongDetail.lyrics ||
                 song.updated_date !== updatedSongDetail.updated_date) {
               
-              console.log('[SongDetailPage] Song data has changed, updating...', {
+              console.log('[SongDetailPage] Dữ liệu bài hát đã thay đổi, đang cập nhật...', {
                 oldLyricLength: song?.lyric?.length || 0,
                 newLyricLength: updatedSongDetail.lyric?.length || 0,
                 oldUpdatedDate: song?.updated_date,
@@ -348,16 +378,16 @@ const SongDetailPage = () => {
               
               setSong(updatedSongDetail);
               setError(null); // Clear any previous errors about missing lyrics
-              console.log(`[SongDetailPage] Refreshed song detail for ID ${currentSongId} after sync`);
+              console.log(`[SongDetailPage] Đã làm mới chi tiết bài hát ID ${currentSongId} sau khi sync`);
             } else {
-              console.log('[SongDetailPage] No changes detected in song data');
+              console.log('[SongDetailPage] Không phát hiện thay đổi trong dữ liệu bài hát');
             }
           } else {
             // Try basic song metadata if no detailed lyrics
             const basicSong = await offlineManager.getCachedSong(currentSongId);
             if (basicSong && (!song || basicSong.updated_date !== song.updated_date)) {
               setSong(basicSong);
-              console.log(`[SongDetailPage] Refreshed basic song data for ID ${currentSongId} after sync`);
+              console.log(`[SongDetailPage] Đã làm mới dữ liệu cơ bản bài hát ID ${currentSongId} sau khi sync`);
               
               // If this was a manual sync and lyrics are still missing, show appropriate message
               if (event.detail?.manualSync && navigator.onLine) {
@@ -367,7 +397,7 @@ const SongDetailPage = () => {
           }
         }
       } catch (updateError) {
-        console.error('[SongDetailPage] Error refreshing song after sync:', updateError);
+        console.error('[SongDetailPage] Lỗi khi làm mới bài hát sau sync:', updateError);
       }
     };
 
@@ -426,7 +456,7 @@ const SongDetailPage = () => {
 
   useEffect(() => {
     if (song?.lyric) {
-      console.log('[SongDetailPage] Parsing lyrics for song:', song.id, song.title);
+      console.log('[SongDetailPage] Đang phân tích lời bài hát:', song.id, song.title);
       setParsedLyrics(parseLyrics(song.lyric));
       // Data is already cached in IndexedDB by offlineManager, no need for localStorage
     } else {
@@ -879,9 +909,9 @@ const SongDetailPage = () => {
         displayText = line.text || '';
       }
       
-      console.log('Original text:', line.text);
-      console.log('Inline chord text:', line.inlineChordText);
-      console.log('Reconstructed display text:', displayText);
+      console.log('Text gốc:', line.text);
+      console.log('Text hợp âm inline:', line.inlineChordText);
+      console.log('Text hiển thị sau khi tái tạo:', displayText);
       
       // Simple regex to find and replace chord patterns
       displayText = displayText.replace(/\[([^\]]+)\]/g, (match, chord) => {
@@ -903,7 +933,7 @@ const SongDetailPage = () => {
         return `<span class="pwa-inline-chord">${formattedChord}</span>`;
       });
       
-      console.log('Final display text:', displayText);
+      console.log('Text hiển thị cuối cùng:', displayText);
 
       return (
         <div key={index} className="pwa-style">
@@ -1205,9 +1235,23 @@ const SongDetailPage = () => {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center">
         <div className="text-center">
           <Music2 className="h-16 w-16 text-blue-300 mx-auto mb-4 animate-pulse" />
-          <p className="text-gray-600">
-            {isLoadingSong ? 'Đang tải bài hát...' : 'Không tìm thấy bài hát'}
+          <p className="text-gray-600 mb-2">
+            {isLoadingSong ? 'Đang tải bài hát...' : 'Chưa có dữ liệu bài hát'}
           </p>
+          {!isLoadingSong && (
+            <>
+              <p className="text-sm text-gray-500 mb-4">
+                Vui lòng quay lại trang chủ để tải dữ liệu bài hát
+              </p>
+              <Button 
+                onClick={() => navigate('/')} 
+                className="mt-2"
+                variant="outline"
+              >
+                Quay lại trang chủ
+              </Button>
+            </>
+          )}
         </div>
       </div>
     );

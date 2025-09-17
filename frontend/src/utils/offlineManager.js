@@ -532,30 +532,19 @@ class OfflineManager {
             });
             
             const songsToUpdate = [];
-            const songIdsToDelete = [];
+            // Không xóa songDetails ở đây vì performSmartSync chỉ sync metadata
+            // songDetails sẽ được xử lý bởi performFullLyricsSync sau đó
             
             for (const song of songs) {
               const cachedUpdatedDate = cachedSongMap.get(song.id);
               
               if (!cachedUpdatedDate || song.updated_date !== cachedUpdatedDate) {
-                // Song is new or updated - need to cache
+                // Song is new or updated - need to cache metadata
                 songsToUpdate.push(song);
-                
-                // If it's an update (not new), mark for lyrics deletion
-                if (cachedUpdatedDate && song.updated_date !== cachedUpdatedDate) {
-                  songIdsToDelete.push(song.id);
-                }
               }
             }
             
-            // Delete outdated lyrics before caching new data
-            if (songIdsToDelete.length > 0) {
-              await Promise.all(songIdsToDelete.map(id => 
-                this.db.delete(this.db.stores.songDetails, id)
-              ));
-            }
-            
-            // Cache only changed songs
+            // Cache only changed songs metadata
             if (songsToUpdate.length > 0) {
               await this.cacheSongs(songsToUpdate);
             }

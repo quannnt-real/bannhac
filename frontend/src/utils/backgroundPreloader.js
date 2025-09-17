@@ -59,8 +59,8 @@ class BackgroundPreloader {
     if (!('caches' in window)) return;
 
     try {
-      // Get current HTML to extract asset URLs
-      const response = await fetch(window.location.href);
+      // Get HTML from root path to extract asset URLs (avoid 404 for SPA routes)
+      const response = await fetch('/');
       const html = await response.text();
       
       // Extract all static assets

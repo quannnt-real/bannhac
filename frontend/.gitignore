@@ -22,3 +22,13 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Upload files
+bannhac-website*.zip
+cpanel-upload/
+.latest-zip-name
+
+# Deploy scripts (chứa thông tin server cá nhân)
+prepare-upload.sh
+auto-deploy.sh
+*.sh
