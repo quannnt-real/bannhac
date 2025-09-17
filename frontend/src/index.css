@@ -142,7 +142,7 @@ code {
     }
 }
 
-/* Custom utilities for HomePageSongCard */
+/* Custom utilities for SongCard components */
 @layer utilities {
   .line-clamp-2 {
     overflow: hidden;

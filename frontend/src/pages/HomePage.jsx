@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Music, Heart, Filter, ChevronUp, Wifi, WifiOff, Import, Download, RefreshCw } from 'lucide-react';
 import { useAppContext } from '../App';
 import SearchBar from '../components/SearchBar';
-import HomePageSongCard from '../components/HomePageSongCard';
+import SongCard from '../components/SongCard';
 import FilterPanel from '../components/FilterPanel';
 import ImportPanel from '../components/ImportPanel';
 import OfflineManagerPanel from '../components/OfflineManagerPanel';
@@ -943,8 +943,9 @@ const HomePage = () => {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredSongs.map((song, index) => (
-                <HomePageSongCard
+                <SongCard
                   key={song.id} // Use song.id as key instead of compound key for better performance
+                  variant="homepage"
                   song={song}
                   onPlay={handleSongPlay}
                   onToggleFavorite={toggleFavorite}

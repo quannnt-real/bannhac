@@ -3,8 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Check, Music, Share2, Plus, Loader2, Edit3, X, Search } from 'lucide-react';
 import { useAppContext } from '../App';
 import { Button } from '../components/ui/button';
-import { Card, CardContent } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import { useScrollSafeArea } from '../hooks/useScrollSafeArea';
@@ -779,52 +777,22 @@ const SharedPlaylistPage = () => {
               ) : (
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                   {availableSongs.map((song) => (
-                    <Card key={song.id} className="hover:shadow-md transition-shadow overflow-hidden">
-                      <CardContent className="p-3">
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-gray-800 truncate text-sm">
-                              {song.title}
-                            </h4>
-                            <div className="flex items-center gap-1 mt-1 flex-wrap">
-                              {song.type_name && (
-                                <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
-                                  {song.type_name}
-                                </Badge>
-                              )}
-                              {song.key_chord && (
-                                <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                                  {song.key_chord}
-                                </Badge>
-                              )}
-                            </div>
-                            
-                            {/* Song Content */}
-                            <div className="space-y-1 text-xs text-gray-600 mt-2">
-                              {song.first_lyric && (
-                                <p className="line-clamp-1">
-                                  <span className="font-medium">Lời đầu:</span> {song.first_lyric}
-                                </p>
-                              )}
-                              {song.chorus && (
-                                <p className="line-clamp-1">
-                                  <span className="font-medium">Điệp khúc:</span> {song.chorus}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <Button
-                            onClick={() => handleAddSong(song)}
-                            size="sm"
-                            className="shrink-0 w-8 h-8 p-0 bg-green-500 hover:bg-green-600 text-white rounded-full"
-                            title="Thêm bài hát vào playlist"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <SongCard
+                      key={song.id}
+                      variant="mini"
+                      song={song}
+                      showFavorite={false}
+                      actionButton={
+                        <Button
+                          onClick={() => handleAddSong(song)}
+                          size="sm"
+                          className="shrink-0 w-8 h-8 p-0 bg-green-500 hover:bg-green-600 text-white rounded-full"
+                          title="Thêm bài hát vào playlist"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
                   ))}
                 </div>
               )}
