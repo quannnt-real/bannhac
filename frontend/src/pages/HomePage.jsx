@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Music, Heart, Filter, ChevronUp, Wifi, WifiOff, Import, Download, RefreshCw } from 'lucide-react';
+import { Music, Heart, Filter, ChevronUp, Wifi, WifiOff, Import, Download, RefreshCw, X } from 'lucide-react';
 import { useAppContext } from '../App';
 import SearchBar from '../components/SearchBar';
 import SongCard from '../components/SongCard';
@@ -13,6 +13,7 @@ import { Badge } from '../components/ui/badge';
 // Import optimized hooks
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import { useScrollSafeArea } from '../hooks/useScrollSafeArea';
+import { useScrollDirection } from '../hooks/useScrollDirection';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const HomePage = () => {
@@ -21,6 +22,9 @@ const HomePage = () => {
   
   // Dynamic safe area based on scroll
   const shouldUseSafeArea = useScrollSafeArea(20);
+  
+  // Show/hide header based on scroll direction
+  const isHeaderVisible = useScrollDirection(10);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -60,15 +64,86 @@ const HomePage = () => {
   const [error, setError] = useState(null);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
-  const [sortConfig, setSortConfig] = useState({
-    sorts: [] // Array of sort objects: [{ field: 'chord', order: 'asc' }, { field: 'title', order: 'desc' }, ...]
-  });
-  const [filters, setFilters] = useState({
-    type_ids: [],
-    topic_ids: [],
-    key_chords: []
-  });
+  
+  // Load filter state from localStorage
+  const loadFilterState = () => {
+    try {
+      const savedFilters = localStorage.getItem('homepage_filters');
+      const savedSortConfig = localStorage.getItem('homepage_sortConfig');
+      
+      return {
+        filters: savedFilters ? JSON.parse(savedFilters) : {
+          type_ids: [],
+          topic_ids: [],
+          key_chords: []
+        },
+        sortConfig: savedSortConfig ? JSON.parse(savedSortConfig) : {
+          sorts: []
+        }
+      };
+    } catch (error) {
+      console.error('Error loading filter state:', error);
+      return {
+        filters: { type_ids: [], topic_ids: [], key_chords: [] },
+        sortConfig: { sorts: [] }
+      };
+    }
+  };
+  
+  const initialState = loadFilterState();
+  const [sortConfig, setSortConfig] = useState(initialState.sortConfig);
+  const [filters, setFilters] = useState(initialState.filters);
   const [allSongs, setAllSongs] = useState([]);
+  
+  // Refs for debouncing localStorage saves
+  const saveTimerRef = useRef(null);
+  
+  // Debounced save to localStorage to improve performance
+  useEffect(() => {
+    // Clear any pending save
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    
+    // Schedule save after a short delay
+    saveTimerRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem('homepage_filters', JSON.stringify(filters));
+      } catch (error) {
+        console.error('Error saving filters:', error);
+      }
+    }, 100); // Delay 100ms to batch multiple changes
+    
+    // Cleanup
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [filters]);
+  
+  useEffect(() => {
+    // Clear any pending save
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    
+    // Schedule save after a short delay
+    saveTimerRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem('homepage_sortConfig', JSON.stringify(sortConfig));
+      } catch (error) {
+        console.error('Error saving sortConfig:', error);
+      }
+    }, 100);
+    
+    // Cleanup
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [sortConfig]);
   
   // Cache for search results to improve performance
   const searchCache = useRef(new Map());
@@ -106,6 +181,62 @@ const HomePage = () => {
   const clearAllSorts = () => {
     setSortConfig({ sorts: [] });
   };
+  
+  // Calculate active filters count
+  const activeFiltersCount = useMemo(() => {
+    return (filters.type_ids?.length || 0) + 
+           (filters.topic_ids?.length || 0) + 
+           (filters.key_chords?.length || 0);
+  }, [filters]);
+  
+  // Get active filter names for display
+  const getActiveFilterNames = useCallback(() => {
+    const names = [];
+    
+    // Type filters
+    filters.type_ids?.forEach(typeId => {
+      const type = types.find(t => t.id === typeId);
+      if (type) names.push({ type: 'type', id: typeId, name: type.name });
+    });
+    
+    // Topic filters
+    filters.topic_ids?.forEach(topicId => {
+      const topic = topics.find(t => t.id === topicId);
+      if (topic) names.push({ type: 'topic', id: topicId, name: topic.name });
+    });
+    
+    // Chord filters
+    filters.key_chords?.forEach(chord => {
+      names.push({ type: 'chord', id: chord, name: chord });
+    });
+    
+    return names;
+  }, [filters, types, topics]);
+  
+  // Remove individual filter
+  const removeFilter = useCallback((filterType, filterId) => {
+    if (filterType === 'type') {
+      setFilters(prev => ({
+        ...prev,
+        type_ids: prev.type_ids.filter(id => id !== filterId)
+      }));
+    } else if (filterType === 'topic') {
+      setFilters(prev => ({
+        ...prev,
+        topic_ids: prev.topic_ids.filter(id => id !== filterId)
+      }));
+    } else if (filterType === 'chord') {
+      setFilters(prev => ({
+        ...prev,
+        key_chords: (prev.key_chords || []).filter(c => c !== filterId)
+      }));
+    }
+  }, []);
+  
+  // Clear all filters
+  const clearAllFilters = useCallback(() => {
+    setFilters({ type_ids: [], topic_ids: [], key_chords: [] });
+  }, []);
 
   // PWA Install functionality
   useEffect(() => {
@@ -347,6 +478,25 @@ const HomePage = () => {
   useEffect(() => {
     fetchData();
   }, []); // Empty dependency array - chỉ chạy một lần
+
+  // Restore scroll position when returning to HomePage
+  useEffect(() => {
+    // Only restore if we have songs loaded
+    if (!loading && allSongs.length > 0) {
+      const savedPosition = sessionStorage.getItem('homepage_scroll_position');
+      if (savedPosition) {
+        // Use setTimeout to ensure DOM is fully rendered
+        setTimeout(() => {
+          window.scrollTo({
+            top: parseInt(savedPosition, 10),
+            behavior: 'instant' // Use instant instead of smooth for immediate restore
+          });
+          // Clear the saved position after restoring
+          sessionStorage.removeItem('homepage_scroll_position');
+        }, 0);
+      }
+    }
+  }, [loading, allSongs.length]); // Run when loading completes and songs are available
 
   // Listen for online/offline changes to refetch data if needed
   useEffect(() => {
@@ -759,6 +909,8 @@ const HomePage = () => {
 
   // Optimized handlers with useCallback
   const handleSongPlay = useCallback((song) => {
+    // Save current scroll position before navigating
+    sessionStorage.setItem('homepage_scroll_position', window.scrollY.toString());
     navigate(`/song/${song.id}`);
   }, [navigate]);
 
@@ -778,7 +930,13 @@ const HomePage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
       {/* Header */}
-      <header className={`bg-white/80 backdrop-blur-sm border-b border-blue-100 sticky top-0 z-40 ios-safe-top-dynamic ${!shouldUseSafeArea ? 'at-top' : ''}`}>
+      <header 
+        className={`bg-white/80 backdrop-blur-sm border-b border-blue-100 fixed top-0 left-0 right-0 w-full z-40 ios-safe-top-dynamic transition-transform duration-300 ${
+          !shouldUseSafeArea ? 'at-top' : ''
+        } ${
+          isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+        }`}
+      >
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -849,37 +1007,68 @@ const HomePage = () => {
             onSuggestionClick={handleSearchSuggestion}
           />
 
-          {/* Active filters display */}
-          {(sortConfig.sorts.length > 0) && (
-            <div className="flex items-center gap-2 mt-4">
-              <span className="text-sm text-gray-600">Sắp xếp active:</span>
-              {sortConfig.sorts.map((sort, index) => (
-                <Badge key={sort.field} variant="outline" className={`${
-                  index === 0 ? 'text-blue-600 border-blue-200' : 'text-green-600 border-green-200'
-                }`}>
-                  {index === 0 ? '' : '+ '}
-                  {sort.field === 'key_chord' ? 'Hợp âm' :
-                   sort.field === 'type_name' ? 'Thể loại' :
-                   sort.field === 'topic_name' ? 'Chủ đề' :
-                   sort.field === 'title' ? 'Tên bài hát' : sort.field}
-                  {' '}({sort.order === 'asc' ? 'A→Z' : 'Z→A'})
-                </Badge>
-              ))}
-              <Button
-                onClick={clearSort}
-                variant="ghost"
-                size="sm"
-                className="text-gray-500 hover:text-gray-700"
-              >
-                Xóa sắp xếp
-              </Button>
+          {/* Active filters and sorts display */}
+          {(activeFiltersCount > 0 || sortConfig.sorts.length > 0) && (
+            <div className="mt-4 space-y-2">
+              {/* Active Filters */}
+              {activeFiltersCount > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-gray-600 font-medium">Bộ lọc ({activeFiltersCount}):</span>
+                  {getActiveFilterNames().map((filter, index) => (
+                    <Badge 
+                      key={`${filter.type}-${filter.id}`}
+                      variant="outline" 
+                      className="text-purple-600 border-purple-200 bg-purple-50 hover:bg-purple-100 transition-colors cursor-pointer group"
+                      onClick={() => removeFilter(filter.type, filter.id)}
+                    >
+                      {filter.name}
+                      <X className="h-3 w-3 ml-1 group-hover:text-red-600" />
+                    </Badge>
+                  ))}
+                  <Button
+                    onClick={clearAllFilters}
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50 h-6 px-2"
+                  >
+                    Xóa tất cả
+                  </Button>
+                </div>
+              )}
+              
+              {/* Active Sorts */}
+              {sortConfig.sorts.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-gray-600 font-medium">Sắp xếp:</span>
+                  {sortConfig.sorts.map((sort, index) => (
+                    <Badge key={sort.field} variant="outline" className={`${
+                      index === 0 ? 'text-blue-600 border-blue-200' : 'text-green-600 border-green-200'
+                    }`}>
+                      {index === 0 ? '' : '+ '}
+                      {sort.field === 'key_chord' ? 'Hợp âm' :
+                       sort.field === 'type_name' ? 'Thể loại' :
+                       sort.field === 'topic_name' ? 'Chủ đề' :
+                       sort.field === 'title' ? 'Tên bài hát' : sort.field}
+                      {' '}({sort.order === 'asc' ? 'A→Z' : 'Z→A'})
+                    </Badge>
+                  ))}
+                  <Button
+                    onClick={clearAllSorts}
+                    variant="ghost"
+                    size="sm"
+                    className="text-gray-500 hover:text-gray-700 h-6 px-2"
+                  >
+                    Xóa sắp xếp
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="container mx-auto px-4 py-6 pb-32">
+      {/* Main content - Add padding-top to compensate for fixed header */}
+      <main className="container mx-auto px-4 pt-[180px] pb-32">
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-600 font-medium">⚠️ {error}</p>

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { X, ArrowUpDown } from 'lucide-react';
 import { Button } from './ui/button';
+import { Checkbox } from './ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
@@ -13,7 +14,7 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, c
     { value: 'created_date', label: 'Ngày tạo' }
   ];
 
-  const handleQuickSort = (field) => {
+  const handleQuickSort = useCallback((field) => {
     const existingSorts = [...sortConfig.sorts];
     const existingIndex = existingSorts.findIndex(sort => sort.field === field);
     
@@ -29,15 +30,15 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, c
     }
     
     onSortChange({ sorts: existingSorts });
-  };
+  }, [sortConfig.sorts, onSortChange]);
 
-  const removeSort = (field) => {
+  const removeSort = useCallback((field) => {
     onSortChange({
       sorts: sortConfig.sorts.filter(sort => sort.field !== field)
     });
-  };
+  }, [sortConfig.sorts, onSortChange]);
 
-  const getSortStatus = (field) => {
+  const getSortStatus = useCallback((field) => {
     const sort = sortConfig.sorts.find(s => s.field === field);
     if (!sort) return null;
     
@@ -46,7 +47,29 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, c
       order: sort.order,
       priority: index + 1
     };
-  };
+  }, [sortConfig.sorts]);
+  
+  // Memoized handlers for better performance
+  const handleTypeToggle = useCallback((typeId, checked) => {
+    const newTypeIds = checked
+      ? [...filters.type_ids, typeId]
+      : filters.type_ids.filter(id => id !== typeId);
+    onFilterChange({ ...filters, type_ids: newTypeIds });
+  }, [filters, onFilterChange]);
+  
+  const handleTopicToggle = useCallback((topicId, checked) => {
+    const newTopicIds = checked
+      ? [...filters.topic_ids, topicId]
+      : filters.topic_ids.filter(id => id !== topicId);
+    onFilterChange({ ...filters, topic_ids: newTopicIds });
+  }, [filters, onFilterChange]);
+  
+  const handleChordToggle = useCallback((chord, checked) => {
+    const newKeyChords = checked
+      ? [...(filters.key_chords || []), chord]
+      : (filters.key_chords || []).filter(c => c !== chord);
+    onFilterChange({ ...filters, key_chords: newKeyChords });
+  }, [filters, onFilterChange]);
 
   const quickSortButtons = [
     { field: 'key_chord', label: 'Hợp âm' },
@@ -84,16 +107,9 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, c
                 <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                   {types.map((type) => (
                     <label key={type.id} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={filters.type_ids.includes(type.id)}
-                        onChange={(e) => {
-                          const newTypeIds = e.target.checked
-                            ? [...filters.type_ids, type.id]
-                            : filters.type_ids.filter(id => id !== type.id);
-                          onFilterChange({ ...filters, type_ids: newTypeIds });
-                        }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        onCheckedChange={(checked) => handleTypeToggle(type.id, checked)}
                       />
                       <span className="text-sm text-gray-700">{type.name}</span>
                     </label>
@@ -107,16 +123,9 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, c
                 <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                   {topics.map((topic) => (
                     <label key={topic.id} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={filters.topic_ids.includes(topic.id)}
-                        onChange={(e) => {
-                          const newTopicIds = e.target.checked
-                            ? [...filters.topic_ids, topic.id]
-                            : filters.topic_ids.filter(id => id !== topic.id);
-                          onFilterChange({ ...filters, topic_ids: newTopicIds });
-                        }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        onCheckedChange={(checked) => handleTopicToggle(topic.id, checked)}
                       />
                       <span className="text-sm text-gray-700">{topic.name}</span>
                     </label>
@@ -130,16 +139,9 @@ const FilterPanel = ({ show, onClose, sortConfig, onSortChange, types, topics, c
                 <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
                   {chords.map((chord) => (
                     <label key={chord} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={filters.key_chords?.includes(chord) || false}
-                        onChange={(e) => {
-                          const newKeyChords = e.target.checked
-                            ? [...(filters.key_chords || []), chord]
-                            : (filters.key_chords || []).filter(c => c !== chord);
-                          onFilterChange({ ...filters, key_chords: newKeyChords });
-                        }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        onCheckedChange={(checked) => handleChordToggle(chord, checked)}
                       />
                       <span className="text-sm text-gray-700 font-mono">{chord}</span>
                     </label>

@@ -47,7 +47,6 @@ self.addEventListener('install', event => {
       caches.open(STATIC_CACHE).then(async cache => {
         try {
           await cache.addAll(STATIC_ASSETS);
-          console.log('[SW] Static assets cached successfully');
         } catch (error) {
           console.warn('[SW] Failed to cache some static assets, trying fallbacks:', error);
           // Try to cache fallback assets individually
@@ -67,7 +66,7 @@ self.addEventListener('install', event => {
       // Discover and cache critical resources
       discoverCriticalResources()
     ]).then(() => {
-      console.log('[SW] Installation complete, skipping waiting');
+      console.log('[SW] Installation complete');
       self.skipWaiting();
     }).catch(error => {
       console.error('[SW] Installation failed:', error);
@@ -78,7 +77,6 @@ self.addEventListener('install', event => {
 // Discover and cache critical JS/CSS resources
 async function discoverCriticalResources() {
   try {
-    console.log('[SW] Discovering critical resources...');
     // Force reload HTML to get latest content
     const response = await fetch('/index.html', { cache: 'reload' });
     const html = await response.text();
@@ -91,8 +89,6 @@ async function discoverCriticalResources() {
       file.startsWith('/static/') || file.startsWith('./static/')
     );
     
-    console.log('[SW] Found critical files:', criticalFiles);
-    
     // Cache critical files with force reload
     if (criticalFiles.length > 0) {
       const cache = await caches.open(STATIC_CACHE);
@@ -104,13 +100,12 @@ async function discoverCriticalResources() {
           if (fileResponse.ok) {
             await cache.put(file, fileResponse);
             cachedCount++;
-            console.log(`[SW] Cached critical resource: ${file}`);
           }
         } catch (error) {
           console.warn(`[SW] Failed to cache critical resource: ${file}`, error);
         }
       }
-      console.log(`[SW] Successfully cached ${cachedCount}/${criticalFiles.length} critical resources`);
+      console.log(`[SW] Cached ${cachedCount}/${criticalFiles.length} critical resources`);
     }
   } catch (error) {
     console.warn('[SW] Failed to discover critical resources:', error);
@@ -123,7 +118,6 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(names => {
-        console.log('[SW] Existing caches:', names);
         return Promise.all(
           names.map(name => {
             if (name.includes('bannhac-') && !name.includes(CACHE_VERSION)) {
@@ -134,7 +128,6 @@ self.addEventListener('activate', event => {
         );
       })
       .then(() => {
-        console.log('[SW] Claiming clients...');
         return self.clients.claim();
       })
       .then(() => {
@@ -185,25 +178,20 @@ self.addEventListener('fetch', event => {
 
 // Navigation request handler
 async function handleNavigationRequest(request) {
-  console.log(`[SW] Handling navigation: ${request.url}`);
-  
   try {
-    console.log('[SW] Trying network for navigation...');
     const networkResponse = await fetch(request);
     if (networkResponse.ok) {
-      console.log('[SW] Network navigation successful, caching...');
       const cache = await caches.open(DYNAMIC_CACHE);
       cache.put(request, networkResponse.clone());
       return networkResponse;
     }
   } catch (error) {
-    console.log('[SW] Network navigation failed, trying cache...', error);
+    // Network failed, use cache
   }
   
   // Serve cached index.html for SPA routing
   const cachedResponse = await caches.match('/index.html');
   if (cachedResponse) {
-    console.log('[SW] Serving cached index.html for navigation');
     return cachedResponse;
   }
   
@@ -213,12 +201,10 @@ async function handleNavigationRequest(request) {
     const cache = await caches.open(cacheName);
     const response = await cache.match('/index.html');
     if (response) {
-      console.log(`[SW] Found index.html in cache: ${cacheName}`);
       return response;
     }
   }
   
-  console.log('[SW] No cached index.html found, returning offline page');
   // Fallback offline page
   return new Response(`
     <!DOCTYPE html>
@@ -339,45 +325,37 @@ async function handleImageRequest(request) {
 
 // Static asset handler - cache-first with fallback
 async function handleStaticAssetRequest(request) {
-  console.log(`[SW] Handling static asset: ${request.url}`);
-  
   // Try cache first
   const cache = await caches.open(STATIC_CACHE);
   const cachedResponse = await cache.match(request);
   if (cachedResponse) {
-    console.log(`[SW] Serving from cache: ${request.url}`);
     return cachedResponse;
   }
   
   // Try network and cache response
   try {
-    console.log(`[SW] Fetching from network: ${request.url}`);
     const networkResponse = await fetch(request);
     if (networkResponse.ok) {
-      console.log(`[SW] Caching network response: ${request.url}`);
       cache.put(request, networkResponse.clone());
       return networkResponse;
     }
   } catch (error) {
-    console.warn(`[SW] Failed to fetch static asset: ${request.url}`, error);
+    // Network failed
   }
   
   // For critical resources, return a minimal fallback
   if (request.url.includes('.js')) {
-    console.log(`[SW] Returning JS fallback for: ${request.url}`);
     return new Response('console.warn("Script not available offline");', {
       headers: { 'Content-Type': 'application/javascript' }
     });
   }
   
   if (request.url.includes('.css')) {
-    console.log(`[SW] Returning CSS fallback for: ${request.url}`);
     return new Response('/* Styles not available offline */', {
       headers: { 'Content-Type': 'text/css' }
     });
   }
   
-  console.log(`[SW] No fallback available for: ${request.url}`);
   return new Response('', { status: 404 });
 }
 
@@ -399,7 +377,6 @@ async function handleDefaultRequest(request) {
 
 // Message handling for app communication
 self.addEventListener('message', event => {
-  
   if (event.data?.type === 'CACHE_UPDATE') {
     event.waitUntil(handleCacheUpdate());
     return;
@@ -422,7 +399,6 @@ self.addEventListener('message', event => {
     event.waitUntil(
       clients.matchAll({ type: 'window', includeUncontrolled: true })
         .then(clientList => {
-          
           // Try to focus existing PWA window
           for (const client of clientList) {
             if (client.url.includes(location.origin)) {
@@ -451,7 +427,6 @@ self.addEventListener('message', event => {
 
 // Background sync event handler
 self.addEventListener('sync', event => {
-  
   if (event.tag === 'background-sync') {
     event.waitUntil(handleBackgroundSync());
   }
@@ -460,7 +435,6 @@ self.addEventListener('sync', event => {
 // Background sync handler
 async function handleBackgroundSync() {
   try {
-    
     // Import dynamic import for offlineManager
     const offlineManagerModule = await import('/src/utils/offlineManager.js');
     const { offlineManager } = offlineManagerModule;
@@ -475,7 +449,6 @@ async function handleBackgroundSync() {
         success: true
       });
     });
-    
   } catch (error) {
     console.error('[SW] Background sync failed:', error);
     
@@ -503,7 +476,6 @@ self.addEventListener('notificationclick', event => {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then(clientList => {
-        
         // First, check if there's already a window with the exact URL
         for (const client of clientList) {
           if (client.url === fullUrl) {
