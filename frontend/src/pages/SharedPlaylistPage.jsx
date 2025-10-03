@@ -5,7 +5,6 @@ import { useAppContext } from '../App';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
-import { useScrollSafeArea } from '../hooks/useScrollSafeArea';
 import SongCard from '../components/SongCard';
 import SharePanel from '../components/SharePanel';
 import { storeKeys, retrieveKeys } from '../utils/keyStorage';
@@ -14,9 +13,6 @@ import { offlineManager } from '../utils/offlineManager';
 const SharedPlaylistPage = () => {
   // Set page title
   usePageTitle(createPageTitle('Playlist chia sẻ'));
-  
-  // Dynamic safe area based on scroll
-  const shouldUseSafeArea = useScrollSafeArea(20);
   
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -540,7 +536,7 @@ const SharedPlaylistPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
       {/* Header */}
-      <header className={`bg-white/80 backdrop-blur-sm border-b border-blue-100 sticky top-0 z-40 ios-safe-top-dynamic ${!shouldUseSafeArea ? 'at-top' : ''}`}>
+      <header className="bg-white/80 backdrop-blur-sm border-b border-blue-100 sticky top-0 z-40 ios-safe-top-sticky">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

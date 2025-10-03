@@ -54,15 +54,46 @@ body {
     padding-top: env(safe-area-inset-top);
   }
   
-  /* Dynamic safe area - only when scrolled */
-  .ios-safe-top-dynamic {
-    transition: padding-top 0.3s ease;
-    padding-top: env(safe-area-inset-top);
+  /* Dynamic safe area for HomePage with momentum scroll - only in PWA mode */
+  @media (display-mode: standalone) {
+    .ios-safe-top-dynamic {
+      /* ALWAYS keep safe area padding in PWA mode to avoid notch */
+      padding-top: env(safe-area-inset-top);
+    }
+    
+    /* at-top class only disables transition, NOT padding */
+    .ios-safe-top-dynamic.at-top {
+      transition: none;
+    }
+    
+    /* Enable transition when not at top */
+    .ios-safe-top-dynamic:not(.at-top) {
+      transition: padding-top 0.3s ease;
+    }
   }
   
-  /* No safe area when at top */
-  .ios-safe-top-dynamic.at-top {
-    padding-top: 0;
+  /* Sticky header for detail pages - extends background to cover notch */
+  @media (display-mode: standalone) {
+    .ios-safe-top-sticky {
+      /* Extend background upward to cover safe area */
+      margin-top: calc(-1 * env(safe-area-inset-top));
+      padding-top: env(safe-area-inset-top);
+    }
+    
+    /* Ensure content doesn't overlap with notch */
+    .ios-safe-top-sticky > * {
+      position: relative;
+      z-index: 1;
+    }
+  }
+  
+  /* On web browser (not standalone), no safe area adjustments */
+  @media not all and (display-mode: standalone) {
+    .ios-safe-top-dynamic,
+    .ios-safe-top-sticky {
+      padding-top: 0;
+      margin-top: 0;
+    }
   }
   
   .ios-safe-bottom {
@@ -84,12 +115,27 @@ body {
     padding-top: 44px; /* Fallback for devices without env() support */
   }
   
-  .ios-safe-top-dynamic {
-    padding-top: 44px; /* Fallback for devices without env() support */
-  }
-  
-  .ios-safe-top-dynamic.at-top {
-    padding-top: 0; /* No safe area when at top */
+  /* Only apply fallback in PWA standalone mode */
+  @media (display-mode: standalone) {
+    .ios-safe-top-dynamic {
+      /* ALWAYS 44px in PWA mode to avoid notch */
+      padding-top: 44px;
+    }
+    
+    /* at-top only disables transition */
+    .ios-safe-top-dynamic.at-top {
+      transition: none;
+    }
+    
+    .ios-safe-top-dynamic:not(.at-top) {
+      transition: padding-top 0.3s ease;
+    }
+    
+    /* Sticky header extends to cover notch */
+    .ios-safe-top-sticky {
+      margin-top: -44px;
+      padding-top: 44px;
+    }
   }
 }
 

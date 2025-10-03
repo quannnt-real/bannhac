@@ -23,8 +23,8 @@ const HomePage = () => {
   // Dynamic safe area based on scroll
   const shouldUseSafeArea = useScrollSafeArea(20);
   
-  // Show/hide header based on scroll direction
-  const isHeaderVisible = useScrollDirection(10);
+  // Momentum-based header that follows scroll movement
+  const headerTranslateY = useScrollDirection();
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -931,11 +931,13 @@ const HomePage = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
       {/* Header */}
       <header 
-        className={`bg-white/80 backdrop-blur-sm border-b border-blue-100 fixed top-0 left-0 right-0 w-full z-40 ios-safe-top-dynamic transition-transform duration-300 ${
+        className={`bg-white/80 backdrop-blur-sm border-b border-blue-100 fixed top-0 left-0 right-0 w-full z-40 ios-safe-top-dynamic ${
           !shouldUseSafeArea ? 'at-top' : ''
-        } ${
-          isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
         }`}
+        style={{
+          transform: `translateY(-${headerTranslateY}px)`,
+          transition: 'none' // No transition for momentum-based movement
+        }}
       >
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
