@@ -1016,35 +1016,62 @@ const SongDetailPage = () => {
             dynamicSpacing = Math.max(35, 25 + chordLength * 7); // 25px base + 7px per character
           }
           
-          // Always use the actual character from text (or empty if at end)
-          // Don't add artificial spacing that breaks words
-          const displayChar = charAtPos;
+          // For consecutive chords (2nd chord onwards in a sequence), don't include character
+          // For previous-to-consecutive (1st chord before sequence), still show the character
+          // This prevents word splitting issues like "g    ia" or "m      en"
+          const displayChar = isConsecutiveChord ? '' : charAtPos;
           
-          // Add chord with character at position (hopamchuan structure)
-          const chordElement = (
-            <span 
-              key={`chord-${index}`} 
-              className={`pwa-lyric ${isConsecutiveChord ? 'consecutive-chord' : ''} ${isPreviousToConsecutive ? 'previous-to-consecutive' : ''}`}
-              style={{ 
-                position: 'relative',
-                marginRight: (isConsecutiveChord || isPreviousToConsecutive) ? `${dynamicSpacing}px` : undefined
-              }}
-            >
-              <span className="pwa-chord-inline">
-                <i>[</i>
-                <span className="pwa-chord">
-                  <span dangerouslySetInnerHTML={{ __html: formatChord(chordInfo.chord) }}></span>
+          // For consecutive chords: add a spacer span first, then the chord above it
+          if (isConsecutiveChord) {
+            // Add invisible spacer with the chord positioned above it
+            lineElements.push(
+              <span 
+                key={`chord-${index}`} 
+                className="pwa-lyric consecutive-chord"
+                style={{ 
+                  position: 'relative'
+                }}
+              >
+                <span className="pwa-chord-inline">
+                  <i>[</i>
+                  <span className="pwa-chord">
+                    <span dangerouslySetInnerHTML={{ __html: formatChord(chordInfo.chord) }}></span>
+                  </span>
+                  <i>]</i>
                 </span>
-                <i>]</i>
               </span>
-              {displayChar}
-            </span>
-          );
+            );
+          } else {
+            // Normal chord with character
+            const chordElement = (
+              <span 
+                key={`chord-${index}`} 
+                className={`pwa-lyric ${isPreviousToConsecutive ? 'previous-to-consecutive' : ''}`}
+                style={{ 
+                  position: 'relative',
+                  marginRight: isPreviousToConsecutive ? `${dynamicSpacing}px` : undefined
+                }}
+              >
+                <span className="pwa-chord-inline">
+                  <i>[</i>
+                  <span className="pwa-chord">
+                    <span dangerouslySetInnerHTML={{ __html: formatChord(chordInfo.chord) }}></span>
+                  </span>
+                  <i>]</i>
+                </span>
+                {displayChar}
+              </span>
+            );
+            
+            lineElements.push(chordElement);
+          }
           
-          lineElements.push(chordElement);
-          
-          // Always advance by 1 if there's a character, or stay at same position if at end
-          lastPos = charAtPos ? chordPos + 1 : chordPos;
+          // Only advance position if we actually displayed the character
+          // For consecutive chords where displayChar is empty, don't advance
+          // This ensures the character is included in the remaining text
+          if (displayChar) {
+            lastPos = chordPos + 1;
+          }
         });
 
         // Add remaining text after last chord
