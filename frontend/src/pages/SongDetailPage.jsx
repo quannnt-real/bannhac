@@ -1592,7 +1592,8 @@ const SongDetailPage = () => {
                   '--chord-border': chordColor + '30',
                   '--chord-top': `-${chordFontSize - 4}px`,
                   '--text-padding-top': `${chordFontSize}px`,
-                  '--line-height': `${lyricFontSize + chordFontSize + 6}px`
+                  '--line-height': `${lyricFontSize + chordFontSize + 16}px`,
+                  '--chord-padding': `${Math.max(1, Math.round(chordFontSize * 0.15))}px ${Math.max(4, Math.round(chordFontSize * 0.4))}px`
                 }}
               >
                 <div 
