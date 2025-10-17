@@ -954,33 +954,59 @@ const SongDetailPage = () => {
           const charAtPos = lineText[chordPos] || '';
           
           // Check if this is consecutive chord (no meaningful text between this and previous chord)
-          // FIXED: Better logic - check if character at position is whitespace or empty
-          // If it's whitespace, we consider it consecutive and will render spacing differently
+          // FIXED: Only treat as consecutive if PREVIOUS iteration explicitly consumed up to this position
+          // AND there's truly no text content (just whitespace)
           let isConsecutiveChord = false;
           let isPreviousToConsecutive = false;
           
           if (index > 0) {
             const textBetween = lineText.substring(lastPos, chordPos);
-            // Consider consecutive if:
-            // 1. No text between chords, OR
-            // 2. Only whitespace between chords (spaces that should create visual spacing)
-            isConsecutiveChord = textBetween.trim() === '';
+            // Only consider consecutive if text is pure whitespace (spaces, tabs, etc.)
+            // NOT if it's just empty because previous iteration consumed text up to this position
+            // Check: if textBetween is not empty AND it's all whitespace
+            isConsecutiveChord = textBetween.length > 0 && textBetween.trim() === '';
           }
           
-          // Check if NEXT chord is consecutive to mark this as "previous-to-consecutive"
+          // Calculate dynamic spacing based on actual chord box widths
+          let dynamicSpacing = 0;
+          
+          // Check if NEXT chord needs minimum spacing based on PHYSICAL WIDTH, not text length
           if (index < transposedChords.length - 1) {
             const nextChordPos = transposedChords[index + 1].position;
-            const textToNext = lineText.substring(chordPos + 1, nextChordPos);
-            isPreviousToConsecutive = textToNext.trim() === '';
+            const nextChord = transposedChords[index + 1];
+            
+            // Calculate chord box widths (padding + border + text)
+            // Each chord box has: 6px padding each side + 1px border each side = 14px fixed
+            // Plus ~8px per character for the chord text
+            const currentChordBoxWidth = 14 + (chordInfo.chord.length * 8);
+            const nextChordBoxWidth = 14 + (nextChord.chord.length * 8);
+            
+            // Text segment from current chord to next chord (including first char)
+            const textSegment = lineText.substring(chordPos, nextChordPos);
+            // Estimated text width: ~8px per character
+            const textWidth = textSegment.length * 8;
+            
+            // Minimum space needed to prevent chord boxes from overlapping:
+            // We need at least half of current chord box + gap + half of next chord box
+            // This ensures chord boxes have clear visual separation
+            const minSpaceNeeded = (currentChordBoxWidth * 0.6) + 20 + (nextChordBoxWidth * 0.6);
+            
+            // If available text width is less than needed, add extra spacing
+            if (textWidth < minSpaceNeeded) {
+              isPreviousToConsecutive = true;
+              dynamicSpacing = Math.ceil(minSpaceNeeded - textWidth);
+            }
           }
           
-          // Calculate dynamic spacing based on chord length
-          const chordLength = chordInfo.chord.length;
-          let dynamicSpacing = 35; // Increase base spacing to account for border + padding
-          
-          if (isConsecutiveChord || isPreviousToConsecutive) {
-            // More generous spacing calculation for wider characters + border/padding
-            dynamicSpacing = Math.max(35, 25 + chordLength * 7); // 25px base + 7px per character
+          // For truly consecutive chords (no text at all), ensure spacing
+          if (isConsecutiveChord && dynamicSpacing === 0) {
+            const chordLength = chordInfo.chord.length;
+            let nextChordLength = chordLength;
+            if (index < transposedChords.length - 1) {
+              nextChordLength = transposedChords[index + 1].chord.length;
+            }
+            const longestChord = Math.max(chordLength, nextChordLength);
+            dynamicSpacing = 20 + (longestChord * 8);
           }
           
           // For consecutive chords: don't display the whitespace character, but add proper spacing
@@ -1015,6 +1041,22 @@ const SongDetailPage = () => {
             lastPos = chordPos + 1;
           } else {
             // Normal chord with character
+            // FIXED: Create wrapper for chord + ALL text until next chord, then apply spacing to wrapper
+            
+            // Get all text from this chord to the next chord (or end)
+            let textSegment = displayChar; // Start with first character
+            let segmentEnd = chordPos + 1;
+            
+            if (isPreviousToConsecutive && index < transposedChords.length - 1) {
+              // Include all text up to (but NOT including) next chord position
+              // This ensures the next chord's first character is NOT consumed here
+              const nextChordPos = transposedChords[index + 1].position;
+              textSegment = lineText.substring(chordPos, nextChordPos);
+              // Set segmentEnd to nextChordPos so that lastPos skips to it
+              // BUT the next chord will still render its own first character
+              segmentEnd = nextChordPos;
+            }
+            
             const chordElement = (
               <span 
                 key={`chord-${index}`} 
@@ -1031,13 +1073,13 @@ const SongDetailPage = () => {
                   </span>
                   <i>]</i>
                 </span>
-                {displayChar}
+                {textSegment}
               </span>
             );
             
             lineElements.push(chordElement);
-            // Advance position after displaying character
-            lastPos = chordPos + 1;
+            // Advance position to end of text segment
+            lastPos = segmentEnd;
           }
         });
 
