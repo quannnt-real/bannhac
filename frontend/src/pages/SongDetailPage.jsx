@@ -954,18 +954,22 @@ const SongDetailPage = () => {
           const charAtPos = lineText[chordPos] || '';
           
           // Check if this is consecutive chord (no meaningful text between this and previous chord)
-          // Two cases: 1) same position, 2) only whitespace/empty between positions
+          // FIXED: Better logic - check if character at position is whitespace or empty
+          // If it's whitespace, we consider it consecutive and will render spacing differently
           let isConsecutiveChord = false;
           let isPreviousToConsecutive = false;
+          
           if (index > 0) {
             const textBetween = lineText.substring(lastPos, chordPos);
-            // Consider consecutive if no text or only whitespace between chords
+            // Consider consecutive if:
+            // 1. No text between chords, OR
+            // 2. Only whitespace between chords (spaces that should create visual spacing)
             isConsecutiveChord = textBetween.trim() === '';
           }
           
           // Check if NEXT chord is consecutive to mark this as "previous-to-consecutive"
-          if (index < line.chords.length - 1) {
-            const nextChordPos = line.chords[index + 1].position;
+          if (index < transposedChords.length - 1) {
+            const nextChordPos = transposedChords[index + 1].position;
             const textToNext = lineText.substring(chordPos + 1, nextChordPos);
             isPreviousToConsecutive = textToNext.trim() === '';
           }
@@ -979,20 +983,22 @@ const SongDetailPage = () => {
             dynamicSpacing = Math.max(35, 25 + chordLength * 7); // 25px base + 7px per character
           }
           
-          // For consecutive chords (2nd chord onwards in a sequence), don't include character
-          // For previous-to-consecutive (1st chord before sequence), still show the character
-          // This prevents word splitting issues like "g    ia" or "m      en"
-          const displayChar = isConsecutiveChord ? '' : charAtPos;
+          // For consecutive chords: don't display the whitespace character, but add proper spacing
+          // This prevents text duplication while maintaining visual separation
+          const shouldDisplayChar = !isConsecutiveChord || (charAtPos && charAtPos.trim() !== '');
+          const displayChar = shouldDisplayChar ? charAtPos : '';
           
           // For consecutive chords: add a spacer span first, then the chord above it
           if (isConsecutiveChord) {
             // Add invisible spacer with the chord positioned above it
+            // Use non-breaking space to maintain line height and proper positioning
             lineElements.push(
               <span 
                 key={`chord-${index}`} 
                 className="pwa-lyric consecutive-chord"
                 style={{ 
-                  position: 'relative'
+                  position: 'relative',
+                  visibility: 'visible' // Ensure span is visible (though content might be invisible)
                 }}
               >
                 <span className="pwa-chord-inline">
@@ -1002,8 +1008,11 @@ const SongDetailPage = () => {
                   </span>
                   <i>]</i>
                 </span>
+                <span style={{ opacity: 0, userSelect: 'none' }}>&nbsp;</span>
               </span>
             );
+            // Always advance position to skip the whitespace/empty character
+            lastPos = chordPos + 1;
           } else {
             // Normal chord with character
             const chordElement = (
@@ -1027,12 +1036,7 @@ const SongDetailPage = () => {
             );
             
             lineElements.push(chordElement);
-          }
-          
-          // Only advance position if we actually displayed the character
-          // For consecutive chords where displayChar is empty, don't advance
-          // This ensures the character is included in the remaining text
-          if (displayChar) {
+            // Advance position after displaying character
             lastPos = chordPos + 1;
           }
         });

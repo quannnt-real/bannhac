@@ -100,12 +100,14 @@ export const parseLyrics = (lyricText) => {
     
     const text = textParts.join('');
     
+    // FIXED: Don't trim the text to preserve spaces between consecutive chords
+    // Only check if there's meaningful content (trim for checking, but keep original for storage)
     if (text.trim() || chords.length > 0) {
       parsedLines.push({
         type: 'lyric',
         content: line,
         chords: chords,
-        text: text.trim()
+        text: text // Keep original text with spaces
       });
     }
   });

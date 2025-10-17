@@ -90,9 +90,13 @@
 }
 
 /* Very specific selector for consecutive chords - ensure uniform spacing */
+/* FIXED: Add proper spacing for consecutive chords instead of removing it */
 div.pwa-style div.chord-lyric-line span.pwa-lyric.consecutive-chord {
-  margin-left: 0px !important; /* Remove margin-left */
-  padding-left: 0px !important; /* Remove padding */
+  margin-left: 8px !important; /* Add spacing between consecutive chords */
+  display: inline-block !important; /* Ensure proper inline-block behavior */
+  min-width: 1ch !important; /* Ensure minimum width to hold the chord */
+  min-height: 1em !important; /* Ensure minimum height matches line */
+  vertical-align: baseline !important; /* Align with text baseline */
 }
 
 /* New inline chord styling - match regular chord style */
