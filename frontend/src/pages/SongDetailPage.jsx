@@ -13,6 +13,7 @@ import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { useLyricsLayout } from '../hooks/useLyricsLayout';
 import { useOffline } from '../contexts/OfflineContext';
 import { retrieveKeys, cleanupOldKeys, storeKeys } from '../utils/keyStorage';
+import MissingSongAlert from '../components/MissingSongAlert';
 import '../components/LyricsDisplay.css';
 import YouTubePlayer from '../components/YouTubePlayer';
 
@@ -74,6 +75,7 @@ const SongDetailPage = () => {
   
   const [song, setSong] = useState(null);
   const [error, setError] = useState(null); // Add error state
+  const [songNotFound, setSongNotFound] = useState(false); // Track if song doesn't exist
   const [playlistSongs, setPlaylistSongs] = useState([]);
   const [currentKey, setCurrentKey] = useState('C'); // Initialize with 'C' instead of empty string
   const [chordColor, setChordColor] = useState('#ef4444'); // Default red
@@ -257,13 +259,11 @@ const SongDetailPage = () => {
   const embedUrl = mediaInfo?.embedUrl || null;
 
   useEffect(() => {
-    // Force clear all states when ID changes to prevent DOM reuse issues
-    setIsLoadingSong(true);
-    setSong(null);
-    setParsedLyrics([]);
-    setCurrentKey('C');
+    // Clear error states when ID changes
     setIsNavigating(false);
     setSwipeFeedback(null);
+    setError(null); // Clear previous errors
+    setSongNotFound(false); // Clear previous not found state
     
     const fetchSongDetail = async () => {
       try {
@@ -284,43 +284,63 @@ const SongDetailPage = () => {
         }
 
         if (finalSongData) {
+          // Have cache - set song immediately without loading state
           setSong(finalSongData);
           setCurrentKey(finalSongData.key_chord || 'C');
+          setParsedLyrics([]); // Clear to trigger re-parse
+          setIsLoadingSong(false);
           
-          // Trigger background sync if online to check for updates
-          if (navigator.onLine) {
-            offlineManager.performSmartSync('background').then(syncResult => {
-              if (syncResult.success && (syncResult.newSongs > 0 || syncResult.updatedSongs > 0)) {
-                // Check if current song was updated
-                const currentSongId = parseInt(id);
-                offlineManager.getCachedSong(currentSongId).then(updatedSong => {
-                  if (updatedSong && updatedSong.updated_date !== finalSongData.updated_date) {
-                    // Song was updated, trigger lyrics sync for this specific song
-                    offlineManager.performFullLyricsSync(null, [currentSongId]).then(lyricsResult => {
-                      if (lyricsResult.success && lyricsResult.syncedCount > 0) {
-                        // Reload the updated song detail
-                        offlineManager.getCachedSongDetail(currentSongId).then(newSongDetail => {
-                          if (newSongDetail) {
-                            setSong(newSongDetail);
-                            setCurrentKey(newSongDetail.key_chord || 'C');
-                          }
-                        });
-                      }
-                    });
-                  }
-                });
-              }
-            }).catch(error => {
-              console.warn('Sync nền thất bại trong SongDetailPage:', error);
-            });
-          }
+          // fetchSongById() trong block else bên dưới đã tải đầy đủ lyrics
+          // Ở đây là trường hợp có cache, không cần sync thêm
         } else {
-          // Không có dữ liệu → hướng dẫn user về trang chủ, không set error
-          // setError('Không tìm thấy bài hát trong dữ liệu offline. Vui lòng đồng bộ dữ liệu trước.');
+          // No cache - clear old song and show loading
+          setSong(null);
+          setParsedLyrics([]);
+          setCurrentKey('C');
+          setIsLoadingSong(true);
+          
+          // Không có cache → Tải từ API nếu có mạng
+          if (!navigator.onLine) {
+            setError('Không có kết nối mạng. Vui lòng kết nối mạng để tải bài hát lần đầu.');
+            setIsLoadingSong(false);
+            return;
+          }
+          
+          // Có mạng → Tải bài hát cụ thể (nhanh)
+          try {
+            const { fetchSongById } = await import('../utils/apiConfig');
+            
+            // Tải bài hát cụ thể
+            const songData = await fetchSongById(parseInt(id));
+            
+            if (songData) {
+              setSong(songData);
+              setCurrentKey(songData.key_chord || 'C');
+              setIsLoadingSong(false);
+              
+              // fetchSongById() đã tải đầy đủ lyrics (với full=true) rồi
+              // Không cần background sync metadata nữa
+            } else {
+              setSongNotFound(true);
+              setError(`Bài hát ID ${id} không tồn tại trên hệ thống.`);
+              setIsLoadingSong(false);
+            }
+            
+          } catch (fetchError) {
+            console.error('[SongDetailPage] Error fetching song:', fetchError);
+            
+            if (fetchError.message && fetchError.message.includes('not found')) {
+              setSongNotFound(true);
+              setError(`Bài hát ID ${id} không tồn tại trên hệ thống. Có thể đã bị xóa.`);
+            } else {
+              setError('Không thể tải bài hát. Vui lòng kiểm tra kết nối mạng và thử lại.');
+            }
+            setIsLoadingSong(false);
+          }
         }
       } catch (error) {
-        setError('Lỗi khi tải dữ liệu bài hát từ IndexedDB.');
-      } finally {
+        console.error('[SongDetailPage] Error in fetchSongDetail:', error);
+        setError('Lỗi khi tải dữ liệu bài hát.');
         setIsLoadingSong(false);
       }
     };
@@ -377,6 +397,35 @@ const SongDetailPage = () => {
       window.removeEventListener('offlineSyncComplete', handleSyncComplete);
     };
   }, [id, song?.lyric, song?.updated_date]); // More specific dependencies
+
+  // Listen for background song updates from fetchSongById
+  useEffect(() => {
+    const handleSongUpdated = async (event) => {
+      const { songId, updatedData } = event.detail;
+      
+      // Only update if it's the current song
+      if (songId && parseInt(songId) === parseInt(id)) {
+        console.log('[SongDetailPage] Song updated in background:', songId);
+        
+        // Update the song data silently
+        setSong(updatedData);
+        
+        // Optionally show a subtle notification
+        // window.dispatchEvent(new CustomEvent('syncNotification', {
+        //   detail: { 
+        //     type: 'info', 
+        //     message: 'Đã cập nhật phiên bản mới nhất' 
+        //   }
+        // }));
+      }
+    };
+
+    window.addEventListener('songUpdated', handleSongUpdated);
+    
+    return () => {
+      window.removeEventListener('songUpdated', handleSongUpdated);
+    };
+  }, [id]);
 
   // Memoize để tránh re-render không cần thiết
   const memoizedPlaylistIds = useMemo(() => 
@@ -1268,14 +1317,30 @@ const SongDetailPage = () => {
 
   if (isLoadingSong || !song) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <Music2 className="h-16 w-16 text-blue-300 mx-auto mb-4 animate-pulse" />
-          <p className="text-gray-600 mb-2">
-            {isLoadingSong ? 'Đang tải bài hát...' : 'Chưa có dữ liệu bài hát'}
-          </p>
-          {!isLoadingSong && (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
+        <div className="text-center max-w-2xl w-full">
+          {isLoadingSong ? (
             <>
+              <Music2 className="h-16 w-16 text-blue-300 mx-auto mb-4 animate-pulse" />
+              <p className="text-gray-600 mb-2">Đang tải bài hát...</p>
+            </>
+          ) : songNotFound ? (
+            // Hiển thị MissingSongAlert khi bài hát không tồn tại
+            <div className="space-y-4">
+              <MissingSongAlert songId={id} />
+              <Button 
+                onClick={() => navigate('/')} 
+                className="mt-4"
+                variant="outline"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Quay lại trang chủ
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Music2 className="h-16 w-16 text-blue-300 mx-auto mb-4" />
+              <p className="text-gray-600 mb-2">Chưa có dữ liệu bài hát</p>
               <p className="text-sm text-gray-500 mb-4">
                 Vui lòng quay lại trang chủ để tải dữ liệu bài hát
               </p>
@@ -1284,6 +1349,7 @@ const SongDetailPage = () => {
                 className="mt-2"
                 variant="outline"
               >
+                <ArrowLeft className="h-4 w-4 mr-2" />
                 Quay lại trang chủ
               </Button>
             </>

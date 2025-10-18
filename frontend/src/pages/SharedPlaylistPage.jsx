@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input';
 import { usePageTitle, createPageTitle } from '../hooks/usePageTitle';
 import SongCard from '../components/SongCard';
 import SharePanel from '../components/SharePanel';
+import MissingSongAlert from '../components/MissingSongAlert';
 import { storeKeys, retrieveKeys } from '../utils/keyStorage';
 import { offlineManager } from '../utils/offlineManager';
 
@@ -24,6 +25,7 @@ const SharedPlaylistPage = () => {
   const [editMode, setEditMode] = useState(false);
   const [songKeys, setSongKeys] = useState({}); // Store keys from URL
   const [displayDate, setDisplayDate] = useState(''); // Store formatted date for display
+  const [missingSongIds, setMissingSongIds] = useState([]); // Store IDs of songs that don't exist
   
   // Add songs panel state
   const [showAddPanel, setShowAddPanel] = useState(false);
@@ -79,29 +81,39 @@ const SharedPlaylistPage = () => {
         // Load songs from IndexedDB
         await offlineManager.init();
         
-        // Get songs from IndexedDB songDetails store
-        const orderedSongs = [];
+        // Bước 1: Kiểm tra cache cho từng bài
+        const cachedSongs = [];
+        const missingSongIds = [];
+        
         for (const songId of songIds) {
           try {
             const song = await offlineManager.getCachedSongDetails(songId);
             if (song) {
-              orderedSongs.push(song);
+              cachedSongs.push(song);
+            } else {
+              missingSongIds.push(songId);
             }
           } catch (error) {
+            missingSongIds.push(songId);
           }
         }
         
-        if (orderedSongs.length > 0) {
-          setPlaylistSongs(orderedSongs);
+        // Bước 2: Hiển thị các bài có sẵn trước (nếu có)
+        if (cachedSongs.length > 0) {
+          const orderedCached = songIds
+            .map(id => cachedSongs.find(s => s.id === id))
+            .filter(Boolean);
           
-          // Merge URL keys with localStorage keys (URL keys take priority)
+          setPlaylistSongs(orderedCached);
+          setLoading(false); // Đã có dữ liệu để hiển thị
+          
+          // Merge URL keys với localStorage keys (URL keys ưu tiên)
           try {
             const savedKeys = localStorage.getItem('playlist_song_keys');
             let mergedKeys = { ...sharedKeys };
             
             if (savedKeys) {
               const localStorageKeys = JSON.parse(savedKeys);
-              // URL keys take priority, but use localStorage for songs not in URL
               mergedKeys = { ...localStorageKeys, ...sharedKeys };
             }
             
@@ -109,17 +121,107 @@ const SharedPlaylistPage = () => {
           } catch (keyError) {
             setSongKeys(sharedKeys);
           }
-          
-          setError(orderedSongs.length < songIds.length ? 
-            `Chỉ tìm thấy ${orderedSongs.length}/${songIds.length} bài hát` : null);
-        } else {
-          setError('Không tìm thấy bài hát nào trong dữ liệu offline. Vui lòng đồng bộ dữ liệu trước.');
-          setPlaylistSongs([]);
         }
+        
+        // Bước 3: Tải các bài thiếu (nếu có)
+        if (missingSongIds.length > 0) {
+          
+          if (!navigator.onLine) {
+            // Không có mạng
+            setError(`Không có kết nối mạng. Chỉ hiển thị ${cachedSongs.length}/${songIds.length} bài đã lưu.`);
+            setMissingSongIds(missingSongIds);
+            setLoading(false);
+            return;
+          }
+          
+          // Có mạng → Tải các bài thiếu
+          try {
+            const { fetchSongById } = await import('../utils/apiConfig');
+            
+            console.log(`[SharedPlaylistPage] Tải ${missingSongIds.length} bài thiếu:`, missingSongIds);
+            
+            // Tải song song (nhanh hơn)
+            const fetchPromises = missingSongIds.map(songId => 
+              fetchSongById(songId)
+                .catch(error => {
+                  console.warn(`[SharedPlaylistPage] Không thể tải bài ${songId}:`, error);
+                  return null; // Trả về null nếu lỗi
+                })
+            );
+            
+            const results = await Promise.allSettled(fetchPromises);
+            
+            // Xử lý kết quả
+            const newSongs = [];
+            const failedSongIds = [];
+            
+            results.forEach((result, index) => {
+              const songId = missingSongIds[index];
+              
+              if (result.status === 'fulfilled' && result.value) {
+                newSongs.push(result.value);
+              } else {
+                failedSongIds.push(songId);
+              }
+            });
+            
+            console.log(`[SharedPlaylistPage] Kết quả: ${newSongs.length} thành công, ${failedSongIds.length} thất bại`);
+            
+            // Cập nhật danh sách (có sẵn + mới tải)
+            const allSongs = [...cachedSongs, ...newSongs];
+            const orderedSongs = songIds
+              .map(id => allSongs.find(s => s.id === id))
+              .filter(Boolean);
+            
+            setPlaylistSongs(orderedSongs);
+            
+            // Lưu danh sách bài lỗi để hiển thị MissingSongAlert
+            if (failedSongIds.length > 0) {
+              setMissingSongIds(failedSongIds);
+            }
+            
+            // Merge keys
+            try {
+              const savedKeys = localStorage.getItem('playlist_song_keys');
+              let mergedKeys = { ...sharedKeys };
+              
+              if (savedKeys) {
+                const localStorageKeys = JSON.parse(savedKeys);
+                mergedKeys = { ...localStorageKeys, ...sharedKeys };
+              }
+              
+              setSongKeys(mergedKeys);
+            } catch (keyError) {
+              setSongKeys(sharedKeys);
+            }
+            
+            // Hiển thị thông báo nếu có bài lỗi
+            if (failedSongIds.length > 0) {
+              setError(`Tìm thấy ${orderedSongs.length}/${songIds.length} bài hát. ${failedSongIds.length} bài không tồn tại.`);
+            } else if (orderedSongs.length < songIds.length) {
+              setError(`Chỉ tìm thấy ${orderedSongs.length}/${songIds.length} bài hát`);
+            } else {
+              setError(null);
+            }
+            
+            // fetchSongById() đã tải đầy đủ lyrics (với full=true) cho từng bài
+            // Không cần background sync metadata nữa
+            
+          } catch (fetchError) {
+            console.error('[SharedPlaylistPage] Error fetching missing songs:', fetchError);
+            setError('Không thể tải một số bài hát. Vui lòng thử lại.');
+          }
+        } else {
+          // Tất cả bài đều có trong cache
+          setError(null);
+        }
+        
+        setLoading(false);
+        
       } catch (error) {
+        console.error('[SharedPlaylistPage] Error in fetchPlaylistSongs:', error);
         setError('Lỗi khi tải dữ liệu từ IndexedDB');
         setPlaylistSongs([]);
-      } finally {
         setLoading(false);
       }
     };
@@ -244,6 +346,35 @@ const SharedPlaylistPage = () => {
     
     return () => {
       window.removeEventListener('offlineSyncComplete', handleSyncComplete);
+    };
+  }, []);
+
+  // Listen for background song updates from fetchSongById
+  useEffect(() => {
+    const handleSongUpdated = async (event) => {
+      const { songId, updatedData } = event.detail;
+      
+      console.log('[SharedPlaylistPage] Song updated in background:', songId);
+      
+      // Update the song in playlistSongs if it exists
+      setPlaylistSongs(prevSongs => 
+        prevSongs.map(song => 
+          song.id === parseInt(songId) ? { ...song, ...updatedData } : song
+        )
+      );
+      
+      // Also update in allSongs if it exists
+      setAllSongs(prevSongs => 
+        prevSongs.map(song => 
+          song.id === parseInt(songId) ? { ...song, ...updatedData } : song
+        )
+      );
+    };
+
+    window.addEventListener('songUpdated', handleSongUpdated);
+    
+    return () => {
+      window.removeEventListener('songUpdated', handleSongUpdated);
     };
   }, []);
 
@@ -519,7 +650,8 @@ const SharedPlaylistPage = () => {
     );
   }
 
-  if (error) {
+  // Chỉ hiển thị error page nếu không có bài hát nào và có lỗi nghiêm trọng
+  if (error && playlistSongs.length === 0 && missingSongIds.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -693,9 +825,16 @@ const SharedPlaylistPage = () => {
               />
             </div>
           ))}
+          
+          {/* Hiển thị thông báo cho các bài hát không tồn tại */}
+          {missingSongIds.length > 0 && missingSongIds.map((songId) => (
+            <div key={`missing-${songId}`} className="relative">
+              <MissingSongAlert songId={songId} />
+            </div>
+          ))}
         </div>
 
-        {playlistSongs.length === 0 && !loading && (
+        {playlistSongs.length === 0 && missingSongIds.length === 0 && !loading && (
           <div className="text-center py-16">
             <Music className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-600 mb-2">

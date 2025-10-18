@@ -169,32 +169,45 @@ export const fetchSongById = async (id) => {
     // First check if we have cached song detail with lyrics
     const cachedDetail = await offlineManager.getCachedSongDetails(parseInt(id));
     
-    if (cachedDetail && (cachedDetail.lyric || cachedDetail.lyrics) && navigator.onLine) {
-      // Have cached detail, check if we need to update
-      const syncUrl = buildApiUrl(`${API_ENDPOINTS.SONGS_SYNC}`, { 
-        ids: id.toString(), 
-        full: 'true' 
-      });
-      
-      try {
-        const syncResponse = await apiCall(syncUrl);
-        if (syncResponse.success && syncResponse.data.length > 0) {
-          const onlineData = syncResponse.data[0];
-          
-          // Compare timestamps
-          const onlineTime = new Date(onlineData.updated_date || 0).getTime();
-          const cachedTime = new Date(cachedDetail.updated_date || 0).getTime();
-          
-          if (onlineTime > cachedTime) {
-            await offlineManager.cacheSongDetails(onlineData);
-            return onlineData;
-          } else {
-            return cachedDetail;
+    if (cachedDetail && (cachedDetail.lyric || cachedDetail.lyrics)) {
+      // Have cached detail - return immediately for fast UX
+      // Check for updates in background (non-blocking)
+      if (navigator.onLine) {
+        // Background update check - don't await, don't block
+        (async () => {
+          try {
+            const syncUrl = buildApiUrl(`${API_ENDPOINTS.SONGS_SYNC}`, { 
+              ids: id.toString(), 
+              full: 'true' 
+            });
+            
+            const syncResponse = await apiCall(syncUrl);
+            if (syncResponse.success && syncResponse.data.length > 0) {
+              const onlineData = syncResponse.data[0];
+              
+              // Compare timestamps
+              const onlineTime = new Date(onlineData.updated_date || 0).getTime();
+              const cachedTime = new Date(cachedDetail.updated_date || 0).getTime();
+              
+              if (onlineTime > cachedTime) {
+                // Update cache silently in background
+                await offlineManager.cacheSongDetails(onlineData);
+                
+                // Dispatch event to notify UI about the update
+                window.dispatchEvent(new CustomEvent('songUpdated', {
+                  detail: { songId: id, updatedData: onlineData }
+                }));
+              }
+            }
+          } catch (error) {
+            // Silent fail - cache is already returned
+            console.debug(`[fetchSongById] Background update check failed for song ${id}:`, error);
           }
-        }
-      } catch (error) {
-        return cachedDetail;
+        })();
       }
+      
+      // Return cached data immediately (non-blocking)
+      return cachedDetail;
     }
     
     // Need to fetch from API (no cache or no lyrics)

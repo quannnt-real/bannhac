@@ -63,23 +63,46 @@ const SyncNotificationManager = () => {
 
       try {
         await offlineManager.ensureInitialized();
+        
+        // Wait a bit to ensure IndexedDB is fully initialized
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         const cachedSongs = await offlineManager.getCachedSongs();
         
-        // Wait for network status to stabilize
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Additional check: verify if we truly have no data
+        // Check both songs metadata and songDetails
+        const cachedDetails = await offlineManager.getAllCachedSongDetails();
+        const hasAnyData = cachedSongs.length > 0 || cachedDetails.length > 0;
         
-        // Case 1: First time load or after clearing data
-        if (cachedSongs.length === 0 && isOnline) {
+        // Also check localStorage flag to see if we've synced before
+        const hasEverSynced = localStorage.getItem('has_synced_before') === 'true';
+        
+        // Wait for network status to stabilize
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Case 1: First time load ONLY - no cache AND never synced before
+        if (!hasAnyData && !hasEverSynced && isOnline) {
           showNotification('info', 'Đang đồng bộ dữ liệu lần đầu...', 60000);
           hasShownInitialSync.current = true;
           
           // Don't wait for sync here - the completion notification will be triggered
           // by the lyrics_sync_complete event from HomePage
         }
-        // Case 5: App restart - check for updates
+        // Case 5: App restart - check for updates ONLY if cache is old (> 1 hour)
         else if (cachedSongs.length > 0 && isOnline) {
-          // Delay to ensure smooth app startup
-          setTimeout(() => handleBackgroundSync('app_restart'), 2000);
+          // Check last sync time from localStorage
+          const lastSyncTime = localStorage.getItem('last_metadata_sync_time');
+          const now = Date.now();
+          const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
+          
+          // Only sync if cache is older than 1 hour or no last sync time
+          if (!lastSyncTime || (now - parseInt(lastSyncTime)) > oneHour) {
+            // Delay to ensure smooth app startup
+            setTimeout(() => {
+              handleBackgroundSync('app_restart');
+              localStorage.setItem('last_metadata_sync_time', now.toString());
+            }, 2000);
+          }
         }
       } catch (error) {
       }
@@ -144,6 +167,9 @@ const SyncNotificationManager = () => {
         }
         
         if (syncResult.success) {
+          // Mark that we've successfully synced at least once
+          localStorage.setItem('has_synced_before', 'true');
+          
           if (syncResult.isFirstTime) {
             hasShownInitialSync.current = true;
             // Không hiển thị thông báo ngay, chờ lyrics sync hoàn tất
@@ -200,6 +226,9 @@ const SyncNotificationManager = () => {
         showNotification('success', 'Đã xóa toàn bộ dữ liệu. Đang tải lại...', 3000);
         hasShownInitialSync.current = false;
         appInitialized.current = false;
+        // Reset sync flags
+        localStorage.removeItem('has_synced_before');
+        localStorage.removeItem('last_metadata_sync_time');
       } else if (detail.type === 'lyrics_sync_complete') {
         const { syncedCount, isFirstTime } = detail;
         
